@@ -17,9 +17,6 @@ initialize.p <- function(v) {
     rep(1/length(v),length(v))
 }
 
-# v <- colSums(T)
-# M <- initialize.M(T)
-# p <- initialize.p(v)
 
 sample.B <- function(M, p, v) {
     C <- length(p)
@@ -163,6 +160,8 @@ sample.gamma2 <- function(gamma.vec, epsilon, alpha, beta, M, tau.vec, max.gamma
 #' @param delta A numeric value for the delta in the prior
 #' @param gamma.init A numeric value for the starting value of gammas
 #' @param ndraws The number of posterior samples to take
+#' @param max.gamma The maximum value gamma is allowed to take in
+#' posterior samples. Default is 75.
 #'
 #' @return A list of length \code{ndraws} where each entry in the list contains
 #' the posterior draw for each parameter
