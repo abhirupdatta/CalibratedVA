@@ -193,3 +193,107 @@ revamp.sampler <- function(v, T.mat, epsilon, alpha, beta, tau.vec, delta,
     }
     return(post.samples)
 }
+
+#' @title Wrapper function for implementing and the ReVAMP calibration
+#' @description \code{revamp_with_va} trains a VA method (currently one of
+#' Tariff, InterVA, or InSilicoVA) on training data (defaults to PHMRC data),
+#' and then uses the calibration and test data to implement the ReVAMP 
+#' hierarchical Bayesian model. This will perform the steps shown in the 
+#' package vignette in one function call
+#' 
+#' @param train.data A data frame/matrix which is compatible for training the given VA method. 
+#' Should have COD labels and be of moderate size
+#' @param calibration.data A data frame/matrix in the same format as \code{train.data}.
+#' @param test.data A data frame/matrix in the same format as \code{train.data}
+#' and \code{calibration.data}, except without COD labels.
+#' @param train.method A character string specifying the VA training method. As of now,
+#' we support "Tariff", "InSilicoVA", and "InterVA". 
+#' @param epsilon A numeric value for the epsilon in the prior
+#' @param alpha A numeric value for the alpha in the prior
+#' @param beta A numeric value for the beta in the prior
+#' @param tau.vec A numeric vector for the logsd for the sampling distributions
+#' of the gammas
+#' @param delta A numeric value for the delta in the prior
+#' @param gamma.init A numeric value for the starting value of gammas
+#' @param ndraws The number of posterior samples to take
+#' @param max.gamma The maximum value gamma is allowed to take in
+#' posterior samples. Default is 75.
+#' @param nchains The number of chains for which the ReVAMP sampling method will be run
+#' @param train.seeds An optional numeric value containing the seed which should be set
+#' before implementing the given training method
+#' @param sampler.seeds An optional vector of numeric values containing the seeds that should be 
+#' set for each chain of the Gibbs sampler. If given, should be of same length as
+#' the value of \code{nchains}
+#' @param ... Additional parameters for the given training method
+#'
+#' @return 
+#' \item{causes }{ The order of the causes in the output of the Gibbs sampler}
+#' \item{v }{ The C x 1 matrix used by the ReVAMP sampler}
+#' \item{T.mat }{ The C x C calibration matrix used by the ReVAMP sampler}
+#' \item{posterior.results}{ A list of length \code{nchains}, which each element
+#' of the list itself being a list containing the output for the ReVAMP sampler
+#' for that chain} \item{train.seed }{ The seed set before implementing the given training method}
+#' \item{sampler.seeds }{ The seeds set before running each chain of the ReVAMP sampler}
+#' @seealso \code{\link{revamp.sampler}}
+#' 
+#' @import openVA
+#' 
+#' @export
+revamp_with_va <- function(train.data, calibration.data, test.data, train.method,
+                           epsilon, alpha, beta, tau.vec, delta,
+                           gamma.init, ndraws, max.gamma = 75, nchains = 1, train.seed = NULL,
+                           sampler.seeds = NULL, ...)  {
+    if(length(train.method) != 1) {
+        stop("train.method should be a character vector of length 1")
+    }
+    if(!(train.method %in% c('Tariff', 'InSilicoVA', 'InterVA'))) {
+        stop("train.method must be one of Tariff, InSilicoVA, or InterVA")
+    }
+    if(is.null(train.seed)){
+        train.seed <- sample(1:1e6, 1, replace = F)
+    }
+    set.seed(train.seed)
+    VA.fit <- openVA::codeVA(data = rbind(calibration.data, test.data),
+                             data.type = "customize", model = train.method,
+                             data.train = train.data, ...)
+    if(train.method == "Tariff") {
+        all.predictions <- VA.fit$causes.test[,2]
+    } else if (train.method == "InSilicoVA"){
+        prediction.mat <- VA.fit$indiv.prob
+        all.predictions <- colnames(prediction.mat)[apply(prediction.mat, 1, which.max)]
+    } else {
+        all.predictions <- sapply(VA.fit$VA, function(x) {
+            wholeprob <- x$wholeprob
+            return(names(wholeprob)[which.max(wholeprob)])
+        })
+    }
+    
+    allcauses <- sort(unique(c(calibration.data$Cause, train.data$Cause)))
+    ncauses <- length(allcauses)
+    calibration.predictions <- all.predictions[1:nrow(calibration.data)]
+    
+    v <- sapply(allcauses, function(c) sum(all.predictions == c))
+    names(v) <- allcauses
+    
+    T.mat <- matrix(NA, nrow = ncauses, ncol = ncauses)
+    calib.truecod <- calibration.data$Cause
+    for(i in 1:ncauses){
+        for(j in 1:ncauses){
+            T.mat[i,j] <- sum(calib.truecod == allcauses[i] & calibration.predictions == allcauses[j])
+        }
+    }
+    colnames(T.mat) <- rownames(T.mat) <- allcauses
+    if(is.null(sampler.seeds)) {
+        sampler.seeds <- sample(1:1e6, nchains, replace = F)
+    }
+    posterior.list <- lapply(1:nchains, function(i) {
+        set.seed(sampler.seeds[i])
+        posterior <- revamp.sampler(v = v, T.mat = T.mat, epsilon = epsilon,
+                                    alpha=alpha, beta=beta, tau.vec=tau.vec, delta=delta,
+                                    gamma.init=gamma.init, ndraws = ndraws)
+        return(posterior)
+    })
+    names(posterior.list) <- paste0("chain", 1:nchains)
+    return(list(causes = allcauses, v = v, T.mat = T.mat, posterior.results = posterior.list,
+                train.seed = train.seed, sampler.seeds = sampler.seeds))
+}
