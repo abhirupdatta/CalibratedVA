@@ -142,7 +142,7 @@ sample.gamma2 <- function(gamma.vec, epsilon, alpha, beta, M, tau.vec, max.gamma
 }
 
 #' @title Performs Gibbs sampling for calibration
-#' @description \code{gibbs.sampler} takes in estimation of the underlying
+#' @description \code{revamp.sampler} takes in estimation of the underlying
 #' cause of death distribution from training data, as well as a transition
 #' matrix based on calibration data. Along with the prior values,
 #' it will return a list of posterior samples for parameters of interest
@@ -169,7 +169,7 @@ sample.gamma2 <- function(gamma.vec, epsilon, alpha, beta, M, tau.vec, max.gamma
 #' @import MCMCpack
 #'
 #' @export
-gibbs.sampler <- function(v, T.mat, epsilon, alpha, beta, tau.vec, delta,
+revamp.sampler <- function(v, T.mat, epsilon, alpha, beta, tau.vec, delta,
                           gamma.init, ndraws, max.gamma = 75) {
     post.samples <- vector("list", ndraws)
     post.samples[[1]]$M <- initialize.M(T.mat)
