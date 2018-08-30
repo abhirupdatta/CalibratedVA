@@ -28,6 +28,19 @@ sample.B <- function(M, p, v) {
     return(B)
 }
 
+sample.B.ensemble <- function(U, p, v) {
+    C <- length(p)
+    B <- matrix(NA, ncol = C, nrow = length(v))
+    for(i in 1:length(v)){
+        prob <- U[i,] * p
+        if(sum(prob) == 0) {
+            prob <- rep(.0001, length(prob))
+        }
+        B[i,] <- rmultinom(n = 1, size = v[i], prob = prob)
+    }
+    return(B)
+}
+
 sample.M <- function(B, gamma, epsilon, T.mat) {
     C <- nrow(T.mat)
     M <- matrix(NA, ncol = C, nrow = C)
@@ -50,8 +63,37 @@ sample.M2 <- function(B, gamma.vec, epsilon, T.mat) {
     return(M)
 }
 
+sample.M.array.ensemble <- function(B, gamma.mat, epsilon, T.array, causes, j.mat) {
+    M.array <- sapply(1:ncol(j.mat), function(k) {
+        T.mat <- T.array[,,k]
+        gamma.vec <- gamma.mat[,k]
+        C <- nrow(T.mat)
+        M <- matrix(NA, ncol = C, nrow = C)
+        for(i in 1:nrow(M)){
+            B.cause <- B[,i]
+            j.k <- j.mat[,k]
+            b.vec <- sapply(causes, function(c) {
+                which.j.k <- which(j.k == c)
+                return(sum(B.cause[which.j.k]))
+            })
+            alpha <- b.vec + gamma.vec[i] * epsilon + T.mat[i,]
+            alpha[i] <- alpha[i] + gamma.vec[i]
+            M[i,] <- rdirichlet(1, alpha)
+        }
+        return(M)
+    }, simplify = "array")
+    
+    return(M.array)
+}
+
 sample.p <- function(B, delta){
     alpha <- rowSums(B) + delta
+    p.samp <- rdirichlet(1, alpha)
+    return(as.vector(p.samp))
+}
+
+sample.p.ensemble <- function(B, delta){
+    alpha <- colSums(B) + delta
     p.samp <- rdirichlet(1, alpha)
     return(as.vector(p.samp))
 }
@@ -194,6 +236,123 @@ revamp.sampler <- function(v, T.mat, epsilon, alpha, beta, tau.vec, delta,
     return(post.samples)
 }
 
+create.U <- function(M.array, j.mat, causes) {
+    C <- length(causes)
+    U <- matrix(NA, nrow = nrow(j.mat), ncol = C)
+    for(j in 1:nrow(U)) {
+        for(i in 1:ncol(U)){
+            ### j is indexing the vector of combinations (each row in j.mat)
+            ### i is indexing the causes
+            U[j,i] <- prod(sapply(1:ncol(j.mat), function(k) {
+                j.k <- which(causes == j.mat[j, k])
+                return(M.array[i, j.k, k])
+            }))
+        }
+    }
+    return(U)
+}
+##########################
+### test.cod.mat will be a N x K matrix, with entry i,j denoting estimated COD for indiv. i by alg. j
+### calib.cod.mat is same as above, except for calibration set
+### calib.truth is a vector with true COD
+### causes should be a vector of the causes one is interested in
+
+#' @title Performs Gibbs sampling for ensemble calibration 
+#' @description \code{revamp.ensemble.sampler} takes in the top estimated COD
+#' for each subject in the training data, as well as the calibration data.
+#' Along with the prior values, it will return a list of posterior samples
+#' for parameters of interest
+#'
+#' @param test.cod.mat will be a N x K matrix, with entry i,j denoting estimated
+#' COD (as a character)for indiv. i by alg. j
+#' @param calib.cod.mat is in the same format as text.cod.mat, except for the calibration set
+#' @param calib.truth is a character vector with the true COD for each subject in the
+#' calibration set
+#' @param causes is a character vector with the names of the causes you are interested in.
+#' The order of the output vector p will correspond to this vector
+#' @param epsilon A numeric value for the epsilon in the prior
+#' @param alpha A numeric value for the alpha in the prior
+#' @param beta A numeric value for the beta in the prior
+#' @param tau.vec A numeric vector for the logsd for the sampling distributions
+#' of the gammas
+#' @param delta A numeric value for the delta in the prior
+#' @param gamma.init A numeric value for the starting value of gammas
+#' @param ndraws The number of posterior samples to take
+#' @param max.gamma The maximum value gamma is allowed to take in
+#' posterior samples. Default is 75.
+#'
+#' @return A list of length \code{ndraws} where each entry in the list contains
+#' the posterior draw for each parameter
+#'
+#' @import MCMCpack
+#'
+#' @export
+revamp.ensemble.sampler <- function(test.cod.mat, calib.cod.mat, calib.truth, causes,
+                                    epsilon, alpha, beta, tau.vec, delta,
+                                    gamma.init, ndraws, max.gamma = 75) {
+    ### first get matrix of all combinations of j, where the j vector forms the rows
+    K <- ncol(test.cod.mat)
+    C <- length(causes)
+    j.mat <- expand.grid(lapply(1:K, function(k) causes), stringsAsFactors = FALSE)
+    ### Now get the V vector
+    v <- sapply(1:nrow(j.mat), function(i) {
+        j <- as.character(as.numeric(j.mat[i,]))
+        equal.rows <- sapply(1:nrow(test.cod.mat), function(r) identical(test.cod.mat[r,], j))
+        v.j <- sum(equal.rows)
+        return(v.j)
+    })
+    ### We will have an array of T matrices now
+    T.array <- array(NA, dim = c(C, C, K))
+    for(k in 1:K) {
+        for(i in 1:C){
+            for(j in 1:C) {
+                T.array[i,j,k] <- sum(calib.truth == causes[i] & calib.cod.mat[,k] == causes[j])
+            }
+        }
+    }
+    ### Initialize array of M matrices
+    M.array <- sapply(1:K, function(k) initialize.M(T.array[,,k]), simplify = 'array')
+    
+    post.samples <- vector("list", ndraws)
+    
+    post.samples[[1]]$M.array <- M.array
+    post.samples[[1]]$p <- rep(1 / length(causes), length(causes))
+    ### Make U matrix
+    U <- create.U(post.samples[[1]]$M.array, j.mat, causes)
+    post.samples[[1]]$B <- sample.B.ensemble(U, post.samples[[1]]$p, v)
+    post.samples[[1]]$gamma.mat <- matrix(NA, nrow = C, ncol = K)
+    for(k in 1:K) {
+        T.mat <- T.array[,,k]
+        M.mat <- post.samples[[1]]$M.array[,,k]
+        post.samples[[1]]$gamma.mat[,k] <- sample.gamma2(rep(gamma.init, nrow(T.mat)), epsilon,
+                                                         alpha, beta, M.mat, tau.vec,
+                                                         max.gamma) 
+    }
+    
+    for(i in 2:ndraws){
+        post.samples[[i]]$M.array <- sample.M.array.ensemble(post.samples[[i-1]]$B,
+                                                             post.samples[[i-1]]$gamma.mat,
+                                                             epsilon, T.array, causes, j.mat)
+        post.samples[[i]]$p <- sample.p.ensemble(post.samples[[i-1]]$B, delta)
+        U <- create.U(post.samples[[i]]$M.array, j.mat, causes)
+        post.samples[[i]]$B <- sample.B.ensemble(U, post.samples[[i]]$p, v)
+        post.samples[[i]]$gamma.mat <- matrix(NA, nrow = C, ncol = K)
+        for(k in 1:K) {
+            M.mat <- post.samples[[i]]$M.array[,,k]
+            post.samples[[i]]$gamma.mat[,k] <- sample.gamma2(post.samples[[i-1]]$gamma.mat[,k],
+                                                             epsilon, alpha, beta,
+                                                             M.mat, tau.vec,
+                                                             max.gamma) 
+        }
+        #post.samples[[i]]$gamma <- gamma.init
+        #if((i%%1000)==0) print(paste("Run", i, post.samples[[i]]$gamma))
+        #print(paste("Draw", i))
+        if((i%%10000)==0) print(paste("Draw", i))
+    }
+    return(post.samples)
+}
+
+##########################
 #' @title Wrapper function for implementing and the ReVAMP calibration
 #' @description \code{revamp_with_va} trains a VA method (currently one of
 #' Tariff, InterVA, or InSilicoVA) on training data (defaults to PHMRC data),
