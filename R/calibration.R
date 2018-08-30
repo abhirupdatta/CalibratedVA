@@ -189,11 +189,13 @@ sample.gamma2 <- function(gamma.vec, epsilon, alpha, beta, M, tau.vec, max.gamma
 #' matrix based on calibration data. Along with the prior values,
 #' it will return a list of posterior samples for parameters of interest
 #'
-#' @param v a C x 1 matrix, where C is the number of causes. Each row
-#' should contain the number of estimated causes of death from
-#' the training data
-#' @param T.mat a C x C matrix where the i,j entry is the number of records based
-#' on the calibration set where the true COD is i and the predicted COD is j
+#' @param test.cod will be a vector of length N, with each entry as the estimated
+#' COD (as a character)for indiv. i 
+#' @param calib.cod is in the same format as test.cod, except for the calibration set
+#' @param calib.truth is a character vector with the true COD for each subject in the
+#' calibration set
+#' @param causes is a character vector with the names of the causes you are interested in.
+#' The order of the output vector p will correspond to this vector
 #' @param epsilon A numeric value for the epsilon in the prior
 #' @param alpha A numeric value for the alpha in the prior
 #' @param beta A numeric value for the beta in the prior
@@ -211,8 +213,17 @@ sample.gamma2 <- function(gamma.vec, epsilon, alpha, beta, M, tau.vec, max.gamma
 #' @import MCMCpack
 #'
 #' @export
-revamp.sampler <- function(v, T.mat, epsilon, alpha, beta, tau.vec, delta,
-                          gamma.init, ndraws, max.gamma = 75) {
+revamp.sampler <- function(test.cod, calib.cod, calib.truth, causes,
+                           epsilon, alpha, beta, tau.vec, delta,
+                           gamma.init, ndraws, max.gamma = 75) {
+    v <- sapply(causes, function(c) sum(test.cod == c))
+    C <- length(causes)
+    T.mat <- matrix(NA, nrow = C, ncol = C)
+    for(i in 1:C){
+        for(j in 1:C){
+            T.mat[i,j] <- sum(calib.truth == causes[i] & calib.cod == causes[j])
+        }
+    }
     post.samples <- vector("list", ndraws)
     post.samples[[1]]$M <- initialize.M(T.mat)
     post.samples[[1]]$p <- initialize.p(v)
@@ -265,7 +276,7 @@ create.U <- function(M.array, j.mat, causes) {
 #'
 #' @param test.cod.mat will be a N x K matrix, with entry i,j denoting estimated
 #' COD (as a character)for indiv. i by alg. j
-#' @param calib.cod.mat is in the same format as text.cod.mat, except for the calibration set
+#' @param calib.cod.mat is in the same format as test.cod.mat, except for the calibration set
 #' @param calib.truth is a character vector with the true COD for each subject in the
 #' calibration set
 #' @param causes is a character vector with the names of the causes you are interested in.

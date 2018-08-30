@@ -71,9 +71,34 @@ test.data <- india.data[-calibration.indices,]
 # Implementing ReVAMP with Tariff
 
 We will demonstrate how to use the ReVAMP method with the Tariff
-training method for predicting COD from VA data. 
+training method for predicting COD from VA data. First we will train Tariff. 
+Note that the `data` argument is the data for which we want to obtain COD
+predictions for, which is both the calibration data and our test data.
 
-We first initiate hyper-parameter values. These can be changed of course,
+```{r tariff_trainset}
+set.seed(123)
+tariff.fit <- codeVA(data = rbind(calibration.data, test.data),
+                     data.type = "customize", model = "Tariff",
+                     data.train = train.data, causes.train = "Cause")
+```
+
+We now need to extract three pieces of information for ReVAMP:
+
+1. The individual COD predictions for the test set
+2. The individual COD predictions for the calibration set
+3. The gold-standard COD for the calibration set
+
+Note that all of these must be character vectors
+
+```{r extract_information_tariff}
+pred.cod <- getTopCOD(tariff.fit)
+pred.cod <- as.character(pred.cod[,2])
+calib.cod <- pred.cod[1:nrow(calibration.data)]
+test.cod <- pred.cod[-(1:nrow(calibration.data))]
+calib.truth <- as.character(calibration.data$Cause)
+```
+
+We will now initiate hyper-parameter values for ReVAMP. These can be changed of course,
 but we have found these values work well. We will set the number of draws
 to 10,000 for computational speed in creating the Vignette, but we recommend
 using more (50,000 - 150,000). Further more, we recommend running multiple
@@ -81,83 +106,56 @@ chains to check for convergence. This can be done by setting a new seed
 before running the algorithm.
 
 ```{r hyperparams}
-ncauses <- length(unique(c(calibration.data$Cause, train.data$Cause)))
+causes <- as.character(sort(unique(test.data$Cause)))
 epsilon <- .001
 alpha <- .001
 beta <- .001
 tau <- .1
-tau.vec <- rep(tau, ncauses)
+tau.vec <- rep(tau, length(causes))
 delta <- 1
 gamma.init <- 1
 ndraws <- 10E3
 ```
 
-We will run the `revamp_with_va` function using `Tariff` as the training method. Other 
-choices for the training method are `InSilicoVA` and `InterVA`. We will only
+We will run the `revamp.sampler` using the output from the Tariff model. We will only
 run one chain of the sampler in order to quickly compile the vignette.
 
 ```{r tariff_revamp}
-tariff.revamp <- revamp_with_va(train.data, calibration.data, test.data,
-                                train.method = "Tariff",
+set.seed(1234)
+tariff.revamp <- revamp.sampler(test.cod = test.cod, calib.cod = calib.cod,
+                                calib.truth = calib.truth, causes = causes,
                                 epsilon = epsilon, alpha=alpha, beta=beta,
                                 tau.vec=tau.vec, delta=delta,
-                                gamma.init=gamma.init, ndraws = ndraws, nchains = 1,
-                                train.seed = 123, sampler.seeds = 123, causes.train = "Cause")
+                                gamma.init=gamma.init, ndraws = ndraws)
 ```
 
-The other two methods can be implemented as follows:
-
-```{r insilico_revamp, eval = FALSE}
-insilicoVA.revamp <- revamp_with_va(train.data, calibration.data, test.data,
-                                  train.method = "InSilicoVA",
-                                  epsilon = epsilon, alpha=alpha, beta=beta,
-                                  tau.vec=tau.vec, delta=delta,
-                                  gamma.init=gamma.init, ndraws = ndraws, nchains = 1,
-                                  train.seed = 123, sampler.seeds = 123, causes.train = "Cause",
-                                  Nsim=1000, auto.length = FALSE)
-```
-
-```{r interva_revamp, eval = FALSE}
-interVA.revamp <- revamp_with_va(train.data, calibration.data, test.data,
-                                  train.method = "InterVA",
-                                  epsilon = epsilon, alpha=alpha, beta=beta,
-                                  tau.vec=tau.vec, delta=delta,
-                                  gamma.init=gamma.init, ndraws = ndraws, nchains = 1,
-                                  train.seed = 123, sampler.seeds = 123, causes.train = "Cause",
-                                  version = "4.03", HIV = "h", Malaria = "l")
-```
 
 # Obtaining ReVAMP output
 
-The `posterior.results` element of the `revamp_with_va` output is a list of length `nchains`. Each element in this list is itself a list of length `ndraws`, with each element containing a posterior draw for each parameter. We can inspect what this looks like.
+The `revamp.sampler` output is a list of length `ndraws`. Each element in this list is itself a list, with each element containing a posterior draw for each parameter. We can inspect what this looks like.
 
 ```{r inspect_posterior}
-posterior.chain1 <- tariff.revamp$posterior.results$chain1
-posterior.chain1[[5000]]
+tariff.revamp[[5000]]
 ```
 
 The most important parameters are the $p_{i}$, which is the true CSMF for COD $i$.
-The $i$th element in $p_{i}$ refers to the $i$th element in the `causes` output
-from `revamp_with_va`.
-
-```{r}
-allcauses <- tariff.revamp$causes
-```
+The $i$th element in $p_{i}$ refers to the $i$th element in the `causes` input
+of `revamp.sampler`.
 
 We can extract these parameter estimates and then plot the posterior densities versus
-the true CSMF in the test set. We will use a burn-in of 1,000 and thin the draws by 5.
+the true CSMF in the test set. We will use a burn-in of 2,000 and thin the draws by 5.
 
 ```{r post_dens_plot, fig.width = 6, fig.height = 6}
 library(ggplot2)
 library(dplyr)
-burnin <- 1E3
+burnin <- 2E3
 thin <- 5
 
-
 post.p <- lapply(seq(burnin, ndraws, by = thin), function(i) {
-    draw.p <- posterior.chain1[[i]]$p
-    return(data.frame(p = draw.p, cause = as.character(allcauses), draw = i))
+    draw.p <- tariff.revamp[[i]]$p
+    return(data.frame(p = draw.p, cause = causes, draw = i))
 })
+
 post.p <- do.call(rbind, post.p)
 true.p <- prop.table(table(test.data$Cause))
 true.p <- data.frame(p = unname(as.vector(true.p)), cause = names(true.p))
@@ -167,19 +165,42 @@ ggplot() +
     facet_wrap(~cause)
 ```
 
+We can also compare the CSMF Accuracy of the ReVAMP method to that of Tariff
+
+```{r}
+csmf.tariff <- sapply(causes, function(c) mean(test.cod == c))
+csmf.revamp <- sapply(causes, function(c) mean(post.p$p[post.p$cause == c]))
+csmf.test <- sapply(causes, function(c) mean(test.data$Cause == c))
+tariff.csmf.acc <- getCSMF_accuracy(csmf.tariff, csmf.test)
+revamp.csmf.acc <- getCSMF_accuracy(csmf.revamp, csmf.test)
+```
+
+# Ensemble ReVAMP
+
+In practice, we may not want to rely on the COD estimated from just Tariff. Instead,
+we may want to combine Tariff estimates with those of another algorithm such as
+InsilicoVA. Furthermore, we can use the ReVAMP methodology to use both of these modeling
+strategies.
+
+We will first use InsilicoVA to get individual COD estimates for both our
+calibration and test sets, as we did for Tariff.
+
+```{r insilico_train}
+insilico.train <- codeVA(data = rbind(calibration.data, test.data),
+                         data.type = "customize", model = "InSilicoVA",
+                         data.train = train.data, causes.train = "Cause",
+                         jump.scale = 0.05, Nsim=10000, auto.length = FALSE)
+```
+
+
+
 # Implementing custom VA prediction methods
 
 Instead of using the `revamp_with_va` function with the built-in VA prediction methods,
 you may want to implement your own method. We will show how to do this, using the
 Tariff method as an example.
 
-```{r tariff_trainset}
-set.seed(123)
-tariff.fit <- codeVA(data = rbind(calibration.data, test.data),
-                     data.type = "customize", model = "Tariff",
-                     data.train = train.data, causes.train = "Cause")
-all.predictions <- tariff.fit$causes.test[,2]
-```
+
 
 
 ### Formatting data for ReVAMP
