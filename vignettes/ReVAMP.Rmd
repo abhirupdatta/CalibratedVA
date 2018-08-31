@@ -142,7 +142,7 @@ The most important parameters are the $p_{i}$, which is the true CSMF for COD $i
 The $i$th element in $p_{i}$ refers to the $i$th element in the `causes` input
 of `revamp.sampler`.
 
-We can extract these parameter estimates and then plot the posterior densities versus
+We can extract these parameter estimates using the `revampCSMF` function and then plot the posterior densities versus
 the true CSMF in the test set. We will use a burn-in of 2,000 and thin the draws by 5.
 
 ```{r post_dens_plot, fig.width = 6, fig.height = 6}
@@ -151,29 +151,30 @@ library(dplyr)
 burnin <- 2E3
 thin <- 5
 
-post.p <- lapply(seq(burnin, ndraws, by = thin), function(i) {
-    draw.p <- tariff.revamp[[i]]$p
-    return(data.frame(p = draw.p, cause = causes, draw = i))
-})
+tariff.revamp.csmf <- revampCSMF(tariff.revamp, burnin = burnin, thin = thin)
 
-post.p <- do.call(rbind, post.p)
 true.p <- prop.table(table(test.data$Cause))
 true.p <- data.frame(p = unname(as.vector(true.p)), cause = names(true.p))
 ggplot() +
-    geom_density(data = post.p, aes(p)) +
+    geom_density(data = tariff.revamp.csmf, aes(p)) +
     geom_vline(data = true.p, aes(xintercept = p), colour = 'red') +
-    facet_wrap(~cause)
+    facet_wrap(~cause, scales = "free_y")
 ```
 
 We can also compare the CSMF Accuracy of the ReVAMP method to that of Tariff
 
 ```{r}
 csmf.tariff <- sapply(causes, function(c) mean(test.cod == c))
-csmf.revamp <- sapply(causes, function(c) mean(post.p$p[post.p$cause == c]))
+csmf.revamp <- sapply(causes, function(c) mean(tariff.revamp.csmf$p[tariff.revamp.csmf$cause == c]))
 csmf.test <- sapply(causes, function(c) mean(test.data$Cause == c))
 tariff.csmf.acc <- getCSMF_accuracy(csmf.tariff, csmf.test)
 revamp.csmf.acc <- getCSMF_accuracy(csmf.revamp, csmf.test)
+
+tariff.csmf.acc
+revamp.csmf.acc
 ```
+
+And we see that using `ReVAMP` leads to an improvement in CSMF accuracy.
 
 # Ensemble ReVAMP
 
@@ -182,70 +183,99 @@ we may want to combine Tariff estimates with those of another algorithm such as
 InsilicoVA. Furthermore, we can use the ReVAMP methodology to use both of these modeling
 strategies.
 
-We will first use InsilicoVA to get individual COD estimates for both our
+We will first use InSilicoVA to get individual COD estimates for both our
 calibration and test sets, as we did for Tariff.
 
 ```{r insilico_train}
-insilico.train <- codeVA(data = rbind(calibration.data, test.data),
+set.seed(1234)
+insilico.fit <- codeVA(data = rbind(calibration.data, test.data),
                          data.type = "customize", model = "InSilicoVA",
                          data.train = train.data, causes.train = "Cause",
-                         jump.scale = 0.05, Nsim=10000, auto.length = FALSE)
+                         jump.scale = 0.05, Nsim=5000, auto.length = FALSE)
+pred.cod.insilico <- getTopCOD(insilico.fit)
+pred.cod.insilico <- as.character(pred.cod.insilico[,2])
+calib.cod.insilico <- pred.cod.insilico[1:nrow(calibration.data)]
+test.cod.insilico <- pred.cod.insilico[-(1:nrow(calibration.data))]
 ```
 
+We can quickly run ReVAMP with the InSilicoVA predictions to observe
+differences between InSilicoVA and Tariff with ReVAMp
 
-
-# Implementing custom VA prediction methods
-
-Instead of using the `revamp_with_va` function with the built-in VA prediction methods,
-you may want to implement your own method. We will show how to do this, using the
-Tariff method as an example.
-
-
-
-
-### Formatting data for ReVAMP
-
-We need two main inputs for ReVAMP. The first is a vector $v$ where $v_{i}$ is the
-number of observations in the test (or test + calibration) set that the trained
-(Tariff) model predicts to have died of cause $i$. The second is a matrix $T$ where 
-$T_{i,j}$ is the number of records in the calibration set where the true COD
-is $i$ and the predicted COD from the trained (Tariff) model is $j$. 
-
-Note that $v$ should be of length $C$ and $T$ should be of dimension $C \times C$,
-where $C$ is the total number of causes of death. Also, the $ith$ entry in $v$ should
-correspond to the same COD as the $ith$ row (and column) in $T$. 
-
-```{r format_for_revamp}
-allcauses <- sort(unique(c(calibration.data$Cause, train.data$Cause)))
-ncauses <- length(allcauses)
-calibration.predictions <- all.predictions[1:nrow(calibration.data)]
-
-v <- sapply(allcauses, function(c) sum(all.predictions == c))
-names(v) <- allcauses
-    
-T.mat <- matrix(NA, nrow = ncauses, ncol = ncauses)
-calib.truecod <- calibration.data$Cause
-for(i in 1:ncauses){
-    for(j in 1:ncauses){
-        T.mat[i,j] <- sum(calib.truecod == allcauses[i] & calibration.predictions == allcauses[j])
-    }
-}
-colnames(T.mat) <- rownames(T.mat) <- allcauses
+```{r}
+set.seed(1234)
+insilico.revamp <- revamp.sampler(test.cod = test.cod.insilico, calib.cod = calib.cod.insilico,
+                                  calib.truth = calib.truth, causes = causes,
+                                  epsilon = epsilon, alpha=alpha, beta=beta,
+                                  tau.vec=tau.vec, delta=delta,
+                                  gamma.init=gamma.init, ndraws = ndraws)
 ```
 
+```{r plot_insilico_revamp}
+burnin <- 2E3
+thin <- 5
 
-And now we will run the ReVAMP algorithm, using the same hyperparameter values as before
+insilico.revamp.csmf <- revampCSMF(insilico.revamp, burnin = burnin, thin = thin)
 
-```{r revamp.sampler}
-set.seed(123)
-posterior.custom <- revamp.sampler(v = v, T.mat = T.mat, epsilon = epsilon,
-                               alpha=alpha, beta=beta, tau.vec=tau.vec, delta=delta,
-                               gamma.init=gamma.init, ndraws = ndraws)
+ggplot() +
+    geom_density(data = insilico.revamp.csmf , aes(p)) +
+    geom_vline(data = true.p, aes(xintercept = p), colour = 'red') +
+    facet_wrap(~cause, scales = "free_y")
 ```
 
-And we will confirm that this we obtained the same draws as with the `revamp_with_va` function
+We can inspect the CSMFs again
 
-```{r check_equal_output}
-identical(posterior.custom, posterior.chain1)
+```{r}
+csmf.insilico <- sapply(causes, function(c) mean(test.cod == c))
+csmf.revamp.insilico <- sapply(causes, function(c) mean(insilico.revamp.csmf$p[insilico.revamp.csmf$cause == c]))
+insilico.csmf.acc <- getCSMF_accuracy(csmf.insilico, csmf.test)
+revamp.insilico.csmf.acc <- getCSMF_accuracy(csmf.revamp.insilico, csmf.test)
+insilico.csmf.acc
+revamp.insilico.csmf.acc
 ```
+
+We now have to format the predictions from Tariff and InSilicoVA for the `revamp.ensemble.sampler` function.
+
+```{r format_ensemble}
+test.cod.mat <- matrix(c(pred.cod, pred.cod.insilico), ncol = 2)
+calib.cod.mat <- matrix(c(calib.cod, calib.cod.insilico), ncol = 2)
+```
+
+And we now we can run the function using nearly identical arguments to that of the
+`revamp.sampler` function.
+
+```{r revamp_ensemble}
+set.seed(1234)
+ensemble.revamp <- revamp.ensemble.sampler(test.cod.mat = test.cod.mat,
+                                           calib.cod.mat = calib.cod.mat,
+                                           calib.truth = calib.truth, causes = causes,
+                                           epsilon = epsilon, alpha=alpha, beta=beta,
+                                           tau.vec=tau.vec, delta=delta,
+                                           gamma.init=gamma.init, ndraws = 5000)
+```
+
+And we can again plot the posterior density for the ensemble CSMF estimates.
+
+```{r plot_ensemble_csmf}
+burnin <- 2E3
+thin <- 5
+
+ensemble.revamp.csmf <- revampCSMF(ensemble.revamp, burnin = burnin, thin = thin)
+
+ggplot() +
+    geom_density(data = ensemble.revamp.csmf , aes(p)) +
+    geom_vline(data = true.p, aes(xintercept = p), colour = 'red') +
+    facet_wrap(~cause, scales = "free_y")
+```
+
+And finally we can get the CSMF accuracy for our ensemble method:
+
+```{r csmf_accuracy_ensemble}
+csmf.revamp.ensemble <- sapply(causes, function(c) mean(ensemble.revamp.csmf$p[ensemble.revamp.csmf$cause == c]))
+revamp.ensemble.csmf.acc <- getCSMF_accuracy(csmf.revamp.ensemble, csmf.test)
+revamp.ensemble.csmf.acc
+```
+
+Which appears to be a dramatic increase in accuracy from either of the two
+individual methods + ReVAMP
+
 

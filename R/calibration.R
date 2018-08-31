@@ -23,9 +23,28 @@ sample.B <- function(M, p, v) {
     B <- matrix(NA, ncol = C, nrow = C)
     for(i in 1:C){
         prob <- M[,i] * p
+        if(sum(prob) == 0) {
+            prob <- rep(.0001, length(p))
+        }
         B[,i] <- rmultinom(n = 1, size = v[i], prob = prob)
     }
     return(B)
+}
+
+create.U <- function(M.array, j.mat, causes) {
+    C <- length(causes)
+    U <- matrix(NA, nrow = nrow(j.mat), ncol = C)
+    for(j in 1:nrow(U)) {
+        for(i in 1:ncol(U)){
+            ### j is indexing the vector of combinations (each row in j.mat)
+            ### i is indexing the causes
+            U[j,i] <- prod(sapply(1:ncol(j.mat), function(k) {
+                j.k <- which(causes == j.mat[j, k])
+                return(M.array[i, j.k, k])
+            }))
+        }
+    }
+    return(U)
 }
 
 sample.B.ensemble <- function(U, p, v) {
@@ -226,7 +245,19 @@ revamp.sampler <- function(test.cod, calib.cod, calib.truth, causes,
     }
     post.samples <- vector("list", ndraws)
     post.samples[[1]]$M <- initialize.M(T.mat)
-    post.samples[[1]]$p <- initialize.p(v)
+    for(i in 1:nrow(post.samples[[1]]$M)){
+        if(sum(T.mat[i,]) > 0){
+            post.samples[[1]]$M[i,] <- T.mat[i,] / sum(T.mat[i,])
+        }
+    }
+    #post.samples[[1]]$p <- initialize.p(v)
+    if(sum(v) > 0){
+        post.samples[[1]]$p <- v / sum(v) 
+    } else {
+        post.samples[[1]]$p <- initialize.p(v) 
+    }
+    
+    names(post.samples[[1]]$p) <- causes
     post.samples[[1]]$B <- sample.B(post.samples[[1]]$M, post.samples[[1]]$p, v)
     post.samples[[1]]$gamma <- sample.gamma2(rep(gamma.init, nrow(T.mat)), epsilon,
                                              alpha, beta, post.samples[[1]]$M, tau.vec,
@@ -235,6 +266,7 @@ revamp.sampler <- function(test.cod, calib.cod, calib.truth, causes,
         post.samples[[i]]$M <- sample.M2(post.samples[[i-1]]$B, post.samples[[i-1]]$gamma,
                                         epsilon, T.mat)
         post.samples[[i]]$p <- sample.p(post.samples[[i-1]]$B, delta)
+        names(post.samples[[i]]$p) <- causes
         post.samples[[i]]$B <- sample.B(post.samples[[i]]$M, post.samples[[i]]$p, v)
         post.samples[[i]]$gamma <- sample.gamma2(post.samples[[i-1]]$gamma,
                                                  epsilon, alpha, beta,
@@ -247,21 +279,29 @@ revamp.sampler <- function(test.cod, calib.cod, calib.truth, causes,
     return(post.samples)
 }
 
-create.U <- function(M.array, j.mat, causes) {
-    C <- length(causes)
-    U <- matrix(NA, nrow = nrow(j.mat), ncol = C)
-    for(j in 1:nrow(U)) {
-        for(i in 1:ncol(U)){
-            ### j is indexing the vector of combinations (each row in j.mat)
-            ### i is indexing the causes
-            U[j,i] <- prod(sapply(1:ncol(j.mat), function(k) {
-                j.k <- which(causes == j.mat[j, k])
-                return(M.array[i, j.k, k])
-            }))
-        }
-    }
-    return(U)
-}
+#' @title collect CSMF estimates from the ReVAMP sampler
+#' @description \code{revampCSMF} collects draws of the CSMF estimates
+#' after running the \code{revamp.sampler} function, using the
+#' user supplied burn-in and thinning parameters
+#' 
+#' @param revamp.samples a list returned from \code{revamp.sampler}
+#' @param burnin an integer specifying the number of draws you wish to discard
+#' before collecting draws. Default is 1,000
+#' @param thin an integer specifying the amount the draws should be thinned by
+#' 
+#' @return a data frame with the values of the CSMF and the names of each cause
+#' for each of the draws that are obtained
+#' 
+#' @export
+revampCSMF <- function(revamp.samples, burnin = 1E3, thin = 5) {
+    causes <- names(revamp.samples[[1]]$p)
+    post.p <- lapply(seq(burnin, length(revamp.samples), by = thin), function(i) {
+        draw.p <- revamp.samples[[i]]$p
+        return(data.frame(p = draw.p, cause = causes, draw = i))
+    })
+    return(do.call(rbind, post.p))
+} 
+
 ##########################
 ### test.cod.mat will be a N x K matrix, with entry i,j denoting estimated COD for indiv. i by alg. j
 ### calib.cod.mat is same as above, except for calibration set
@@ -305,6 +345,7 @@ revamp.ensemble.sampler <- function(test.cod.mat, calib.cod.mat, calib.truth, ca
     K <- ncol(test.cod.mat)
     C <- length(causes)
     j.mat <- expand.grid(lapply(1:K, function(k) causes), stringsAsFactors = FALSE)
+    ### columns of j.mat are in order of columns of test.cod.mat
     ### Now get the V vector
     v <- sapply(1:nrow(j.mat), function(i) {
         j <- as.character(as.numeric(j.mat[i,]))
@@ -322,14 +363,32 @@ revamp.ensemble.sampler <- function(test.cod.mat, calib.cod.mat, calib.truth, ca
         }
     }
     ### Initialize array of M matrices
-    M.array <- sapply(1:K, function(k) initialize.M(T.array[,,k]), simplify = 'array')
+    M.array <- sapply(1:K, function(k) {
+        T.mat <- T.array[,,k]
+        M.mat <- initialize.M(T.mat)
+        for(i in 1:nrow(T.mat)){
+            if(sum(T.mat[i,]) > 0) {
+                M.mat[i,] <- T.mat[i,] / sum(T.mat[i,])
+            }
+        }
+        return(M.mat)
+    }, simplify = 'array')
     
     post.samples <- vector("list", ndraws)
     
     post.samples[[1]]$M.array <- M.array
-    post.samples[[1]]$p <- rep(1 / length(causes), length(causes))
+   # post.samples[[1]]$p <- rep(1 / length(causes), length(causes))
+    init.p.list <- lapply(1:ncol(test.cod.mat), function(i) {
+        sapply(causes, function(c) mean(test.cod.mat[,i] == c))
+    })
+    init.p <- Reduce("+", init.p.list) / length(init.p.list)
+    init.p <- init.p / sum(init.p)
+    post.samples[[1]]$p <- init.p
+   # post.samples[[1]]$p <- sapply(causes, function(c) mean(test.cod.mat[,1] == c))
+    names(post.samples[[1]]$p) <- causes
     ### Make U matrix
     U <- create.U(post.samples[[1]]$M.array, j.mat, causes)
+    post.samples[[1]]$U <- U
     post.samples[[1]]$B <- sample.B.ensemble(U, post.samples[[1]]$p, v)
     post.samples[[1]]$gamma.mat <- matrix(NA, nrow = C, ncol = K)
     for(k in 1:K) {
@@ -345,7 +404,9 @@ revamp.ensemble.sampler <- function(test.cod.mat, calib.cod.mat, calib.truth, ca
                                                              post.samples[[i-1]]$gamma.mat,
                                                              epsilon, T.array, causes, j.mat)
         post.samples[[i]]$p <- sample.p.ensemble(post.samples[[i-1]]$B, delta)
+        names(post.samples[[i]]$p) <- causes
         U <- create.U(post.samples[[i]]$M.array, j.mat, causes)
+        post.samples[[i]]$U <- U
         post.samples[[i]]$B <- sample.B.ensemble(U, post.samples[[i]]$p, v)
         post.samples[[i]]$gamma.mat <- matrix(NA, nrow = C, ncol = K)
         for(k in 1:K) {
@@ -408,7 +469,6 @@ revamp.ensemble.sampler <- function(test.cod.mat, calib.cod.mat, calib.truth, ca
 #' 
 #' @import openVA
 #' 
-#' @export
 revamp_with_va <- function(train.data, calibration.data, test.data, train.method,
                            epsilon, alpha, beta, tau.vec, delta,
                            gamma.init, ndraws, max.gamma = 75, nchains = 1, train.seed = NULL,
