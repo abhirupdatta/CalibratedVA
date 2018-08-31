@@ -278,4 +278,12 @@ revamp.ensemble.csmf.acc
 Which appears to be a dramatic increase in accuracy from either of the two
 individual methods + ReVAMP
 
+# Individual predictions with ReVAMP
+
+We will obtain individual predictions from all three ReVAMP methods using the `revampIndPredictions`
+method. It takes in the posterior samples from either the `revamp.sampler` or `revamp.ensemble.sampler` function, 
+as well as the COD predictions (either a vector for an individual algorith or a matrix for the ensemble method) for the test subjects. It also takes in the causes argument discussed previously, as well as
+burn-in and thin arguments.
+
+
 

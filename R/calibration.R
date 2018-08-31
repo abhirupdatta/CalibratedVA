@@ -424,6 +424,60 @@ revamp.ensemble.sampler <- function(test.cod.mat, calib.cod.mat, calib.truth, ca
     return(post.samples)
 }
 
+revampIndPredictions <- function(revamp.samples, test.cod, causes, burnin = 1E3, thin = 5) {
+    prediction.mat <- matrix(NA, nrow = length(causes), ncol = length(causes))
+    ### create a prediction mapping matrix where entry i, j denotes
+    ### P(truth  = i | guess = j)
+    for(i in 1:nrow(prediction.mat)) {
+        for(j in 1:ncol(prediction.mat)){
+            post.samples <- sapply(seq(burnin, length(revamp.samples), by = thin), function(draw) {
+                x <- revamp.samples[[draw]]
+                M <- x$M
+                p <- x$p
+                num <- M[i, j] * p[i]
+                denom <- sum(M[,j] * p)
+                return(num / denom)
+            })
+            prediction.mat[i,j] <- mean(post.samples)
+        }
+    }
+    ind.predictions <- matrix(NA, nrow = length(test.cod), ncol = length(causes))
+    which.cause <- sapply(test.cod, function(c) which(causes == c))
+    for(i in 1:nrow(ind.predictions)) {
+        ind.predictions[i,] <- prediction.mat[,which.cause[i]]
+    }
+    return(ind.predictions)
+}
+
+revampEnsembleIndPredictions <- function(revamp.samples, test.cod.mat, causes, burnin = 1E3, thin = 5) {
+    K <- ncol(test.cod.mat)
+    C <- length(causes)
+    j.mat <- expand.grid(lapply(1:K, function(k) causes), stringsAsFactors = FALSE)
+    ### create a prediction mapping matrix where entry i, j denotes
+    ### P(truth  = i | guess = j)
+    prediction.mat <- matrix(NA, nrow = length(causes), ncol = nrow(j.mat))
+    ####### Work on this
+    for(i in 1:nrow(prediction.mat)) {
+        for(j in 1:ncol(prediction.mat)){
+            post.samples <- sapply(seq(burnin, length(revamp.samples), by = thin), function(draw) {
+                x <- revamp.samples[[draw]]
+                M <- x$M
+                p <- x$p
+                num <- M[i, j] * p[i]
+                denom <- sum(M[,j] * p)
+                return(num / denom)
+            })
+            prediction.mat[i,j] <- mean(post.samples)
+        }
+    }
+    ind.predictions <- matrix(NA, nrow = length(test.cod), ncol = length(causes))
+    which.cause <- sapply(test.cod, function(c) which(causes == c))
+    for(i in 1:nrow(ind.predictions)) {
+        ind.predictions[i,] <- prediction.mat[,which.cause[i]]
+    }
+    return(ind.predictions)
+}
+
 ##########################
 #' @title Wrapper function for implementing and the ReVAMP calibration
 #' @description \code{revamp_with_va} trains a VA method (currently one of
