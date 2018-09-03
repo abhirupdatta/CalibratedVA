@@ -368,7 +368,8 @@ revamp.ensemble.sampler <- function(test.cod.mat, calib.cod.mat, calib.truth, ca
         M.mat <- initialize.M(T.mat)
         for(i in 1:nrow(T.mat)){
             if(sum(T.mat[i,]) > 0) {
-                M.mat[i,] <- T.mat[i,] / sum(T.mat[i,])
+                #M.mat[i,] <- T.mat[i,] / sum(T.mat[i,])
+                M.mat[i,] <- rdirichlet(1, T.mat[i,] + 1)
             }
         }
         return(M.mat)
@@ -551,11 +552,11 @@ revampEnsembleIndPredictions <- function(revamp.samples, test.cod.mat, causes, b
 #' @export
 mle.calibration <- function(test.cod, calib.cod, calib.truth, causes) {
     ### all arguments should be character vectors
-    v <- sapply(causes, function(c) sum(cod.test == c))
+    v <- sapply(causes, function(c) sum(test.cod == c))
     T.mat <- matrix(NA, nrow = length(causes), ncol = length(causes))
     for(i in 1:nrow(T.mat)) {
         for(j in 1:ncol(T.mat)){
-            T.mat[i,j] <- sum(calib.truth == causes[i] & cod.calib == causes[j])
+            T.mat[i,j] <- sum(calib.truth == causes[i] & calib.cod == causes[j])
         }
     }
     calib.negloglik <- function(theta) {

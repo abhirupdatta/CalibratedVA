@@ -300,9 +300,9 @@ burn-in and thin arguments.
 
 ```{r obtain_indiv_cod}
 tariff.revamp.ind.cod <- revampIndPredictions(tariff.revamp, test.cod = test.cod.tariff,
-                                       causes = causes,burnin = 2000, thin = 5)$topCOD
+                                       causes = causes, burnin = 20000, thin = 5)$topCOD
 insilico.revamp.ind.cod <- revampIndPredictions(insilico.revamp, test.cod = test.cod.insilico,
-                                       causes = causes,burnin = 2000, thin = 5)$topCOD
+                                       causes = causes, burnin = 20000, thin = 5)$topCOD
 ensemble.revamp.ind.cod <- revampEnsembleIndPredictions(ensemble.revamp, test.cod.mat = test.cod.mat,
                                                         causes = causes,burnin = 2000, thin = 5)$topCOD
 ```
