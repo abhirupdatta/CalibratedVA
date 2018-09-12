@@ -44,17 +44,7 @@ child.raw <- read.csv(getPHMRC_url("child"))
 child.clean <- ConvertData.phmrc(child.raw, phmrc.type = "child")$output
 ```
 
-For simplicity, we will restrict ourselves to the top 4 COD, and treat
-all other COD as "other". Because "Other Defined Causes of Child Deaths" is
-coded as cause 14, we will not include this cause in the Top 4.
-
-```{r top_4_cod}
-top.cod <- names(sort(table(child.clean$Cause), decreasing = TRUE))
-top4.cod <- top.cod[top.cod != "14"][1:4]
-child.clean$Cause[!(child.clean$Cause %in% top4.cod)] <- 99
-```
-
-We will now split the PHMRC data from India into a calibration and test set,
+We will split the PHMRC data from India into a calibration and test set,
 and use the rest of the PHMRC data as our training set. We will use a calibration
 set size of 200.
 
@@ -66,6 +56,23 @@ train.data <- child.clean[countries == "Other",]
 calibration.indices <- sample(nrow(india.data), 200, replace = F)
 calibration.data <- india.data[calibration.indices,]
 test.data <- india.data[-calibration.indices,]
+```
+
+
+For simplicity, we will restrict ourselves to the top 4 COD (from India), and treat
+all other COD as "other". Because "Other Defined Causes of Child Deaths" is
+coded as cause 14, we will not include this cause in the Top 4.
+
+```{r top_4_cod}
+top.cod <- names(sort(table(india.data$Cause), decreasing = TRUE))
+top4.cod <- top.cod[top.cod != "14"][1:4]
+change.cause <- function(cause) {
+    cause[!(cause %in% top4.cod)] <- 99
+    return(cause)
+}
+train.data$Cause <- change.cause(train.data$Cause)
+test.data$Cause <- change.cause(test.data$Cause)
+calibration.data$Cause <- change.cause(calibration.data$Cause)
 ```
 
 # Implementing ReVAMP with Tariff
@@ -156,7 +163,8 @@ true.p <- data.frame(p = unname(as.vector(true.p)), cause = names(true.p))
 ggplot() +
     geom_density(data = tariff.revamp.csmf, aes(p)) +
     geom_vline(data = true.p, aes(xintercept = p), colour = 'red') +
-    facet_wrap(~cause, scales = "free_y")
+    facet_wrap(~cause, scales = "free_y") +
+    xlim(0, 1)
 ```
 
 We can also compare the CSMF Accuracy of the ReVAMP method to that of Tariff, where we define
@@ -234,7 +242,7 @@ ggplot() +
     facet_wrap(~cause, scales = "free_y")
 ```
 
-We can inspect the CSMFs again
+We can inspect the CSMF accuracies again
 
 ```{r}
 csmf.insilico <- sapply(causes, function(c) mean(test.cod.insilico == c))
