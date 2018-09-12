@@ -1,20 +1,30 @@
 initialize.M <- function(T.mat) {
     ### T.mat is a matrix where T_{ij} is # true COD is cause i and predicted COD is cause j
     #return(prop.table(T.mat+0.1, 1))
-    return(matrix(1/nrow(T.mat),nrow(T.mat),nrow(T.mat)))
-    ## adding the small number 0.1 to make sure all entries of M are +ve
-    # if(sum(T==0)){
-    #     M=0.94*diag(nrow(T.mat))+0.02
-    #     }else{
-    #         M=t(t(T.mat)/rowSums(T.mat))
-    #     }
-    # M
+    #return(matrix(1/nrow(T.mat),nrow(T.mat),nrow(T.mat)))
+    M <- matrix(NA, nrow = nrow(T.mat), ncol = ncol(T.mat))
+    for(i in 1:nrow(M)){
+        T.row <- T.mat[i,]
+        ### Normalize row of T
+        if(sum(T.row) > 0){
+            alpha <- T.row / sum(T.row) + 1
+        } else {
+            alpha <- rep(1, length(T.row))
+        }
+        M[i,] <- rdirichlet(1, alpha)
+    }
+    return(M)
 }
 
 initialize.p <- function(v) {
     ### v is a vector with predicted counts for each COD
     #return(v / sum(v))
-    rep(1/length(v),length(v))
+    #rep(1/length(v),length(v))
+    ### First normalize v
+    v.norm <- v / sum(v)
+    ### Then add normalized version of v to 1
+    alpha <- v.norm + 1
+    as.vector(rdirichlet(1, alpha))
 }
 
 
@@ -245,17 +255,12 @@ revamp.sampler <- function(test.cod, calib.cod, calib.truth, causes,
     }
     post.samples <- vector("list", ndraws)
     post.samples[[1]]$M <- initialize.M(T.mat)
-    for(i in 1:nrow(post.samples[[1]]$M)){
-        if(sum(T.mat[i,]) > 0){
-            post.samples[[1]]$M[i,] <- T.mat[i,] / sum(T.mat[i,])
-        }
-    }
-    #post.samples[[1]]$p <- initialize.p(v)
-    if(sum(v) > 0){
-        post.samples[[1]]$p <- v / sum(v) 
-    } else {
-        post.samples[[1]]$p <- initialize.p(v) 
-    }
+    # for(i in 1:nrow(post.samples[[1]]$M)){
+    #     if(sum(T.mat[i,]) > 0){
+    #         post.samples[[1]]$M[i,] <- T.mat[i,] / sum(T.mat[i,])
+    #     }
+    # }
+    post.samples[[1]]$p <- initialize.p(v)
     
     names(post.samples[[1]]$p) <- causes
     post.samples[[1]]$B <- sample.B(post.samples[[1]]$M, post.samples[[1]]$p, v)
@@ -552,8 +557,10 @@ revampEnsembleIndPredictions <- function(revamp.samples, test.cod.mat, causes, b
 #' @export
 mle.calibration <- function(test.cod, calib.cod, calib.truth, causes) {
     ### all arguments should be character vectors
+    ### 
+    C <- length(causes)
     v <- sapply(causes, function(c) sum(test.cod == c))
-    T.mat <- matrix(NA, nrow = length(causes), ncol = length(causes))
+    T.mat <- matrix(NA, nrow = C, ncol = C)
     for(i in 1:nrow(T.mat)) {
         for(j in 1:ncol(T.mat)){
             T.mat[i,j] <- sum(calib.truth == causes[i] & calib.cod == causes[j])
@@ -562,8 +569,8 @@ mle.calibration <- function(test.cod, calib.cod, calib.truth, causes) {
     calib.negloglik <- function(theta) {
         ### theta will have first 4 elements be p1,...,p4, and then last 16 elements
         ### be M11,...,M14, M21,...,M44
-        p <- theta[1:4]
-        M <- matrix(theta[5:20], nrow = 4, ncol = 4, byrow = TRUE)
+        p <- theta[1:C]
+        M <- matrix(theta[-(1:C)], nrow = C, ncol = C, byrow = TRUE)
         q <- t(M) %*% p
         v.negloglik <- -dmultinom(v, prob = q, log = TRUE)
         T.loglik <- sapply(1:nrow(T.mat), function(i) {
@@ -572,17 +579,20 @@ mle.calibration <- function(test.cod, calib.cod, calib.truth, causes) {
         T.negloglik <- -sum(T.loglik)
         return(T.negloglik + v.negloglik)
     }
-    
-    theta.0 <- rep(1 / length(v), 20)
+    ### Initial vector is all equal
+    theta.0 <- rep(1 / length(v), C + C^2)
+    ### Make sure p and rows of M sum to 1
     eq.fun <- function(theta) {
-        eq.vec <- sapply(seq(1, 17, by = 4), function(i) sum(theta[i:(i + 3)]))
+        eq.vec <- sapply(seq(1, 1 + C^2, by = C), function(i) sum(theta[i:(i + C - 1)]))
         return(eq.vec)
     }
+    
     ineq.fun <- function(theta) return(theta)
+    length.repeat <- length(seq(1, 1 + C^2, by = C))
     mle.calib <- solnp(theta.0, calib.negloglik, eqfun = eq.fun, ineqfun = ineq.fun,
-                       eqB = rep(1, 5), ineqLB = rep(0, 20), ineqUB = rep(1, 20))
-    p.final <- mle.calib$pars[1:4]
-    M.final <- matrix(mle.calib$pars[5:20], nrow = 4, ncol = 4, byrow = TRUE)
+                       eqB = rep(1, length.repeat), ineqLB = rep(0.001, C + C^2), ineqUB = rep(1, C + C^2))
+    p.final <- mle.calib$pars[1:C]
+    M.final <- matrix(mle.calib$pars[-(1:C)], nrow = C, ncol = C, byrow = TRUE)
     return(list(p = p.final, M = M.final))
 }
 
