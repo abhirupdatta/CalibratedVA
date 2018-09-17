@@ -480,7 +480,13 @@ revamp.ensemble.lite.sampler <- function(test.cod.mat, calib.cod.mat, calib.trut
   j.mat <- expand.grid(lapply(1:K, function(k) causes), stringsAsFactors = FALSE)
   ### columns of j.mat are in order of columns of test.cod.mat
   ### Now get the V matrix
-  v <- apply(test.cod.mat,2,table)[causes,]
+  #v <- apply(test.cod.mat,2,table)[causes,]
+  v <- matrix(NA, nrow = C, ncol = K)
+  for(i in 1:nrow(v)){
+      for(j in 1:ncol(v)){
+          v[i,j] <- sum(test.cod.mat[,j] == causes[i])
+      }
+  }
   row.names(v) <- NULL
   
   ### We will have an array of T matrices now
