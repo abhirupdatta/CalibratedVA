@@ -44,74 +44,90 @@ child.raw <- read.csv(getPHMRC_url("child"))
 child.clean <- ConvertData.phmrc(child.raw, phmrc.type = "child")$output
 ```
 
-We will split the PHMRC data from India into a calibration and test set,
+We will split the PHMRC data from Tanzania into a calibration and test set,
 and use the rest of the PHMRC data as our training set. We will use a calibration
-set size of 200.
+set size of 100.
 
 ```{r split_data}
-set.seed(123)
-countries <- ifelse(child.raw$site %in% c("AP", "UP"), "India", "Other")
-india.data <- child.clean[countries == "India",]
+countries <- ifelse(child.raw$site %in% c("Dar", "Pemba"), "Tanzania", "Other")
+tanzania.data <- child.clean[countries == "Tanzania",]
 train.data <- child.clean[countries == "Other",]
-calibration.indices <- sample(nrow(india.data), 200, replace = F)
-calibration.data <- india.data[calibration.indices,]
-test.data <- india.data[-calibration.indices,]
+set.seed(851745)
+calibration.indices <- sample(nrow(tanzania.data), 100, replace = F)
+calibration.data <- tanzania.data[calibration.indices,]
+test.data <- tanzania.data[-calibration.indices,]
 ```
 
+# Implementing individual VA algorithms
 
-For simplicity, we will restrict ourselves to the top 4 COD (from India), and treat
-all other COD as "other". Because "Other Defined Causes of Child Deaths" is
-coded as cause 14, we will not include this cause in the Top 4.
-
-```{r top_4_cod}
-top.cod <- names(sort(table(india.data$Cause), decreasing = TRUE))
-top4.cod <- top.cod[top.cod != "14"][1:4]
-change.cause <- function(cause) {
-    cause[!(cause %in% top4.cod)] <- 99
-    return(cause)
-}
-train.data$Cause <- change.cause(train.data$Cause)
-test.data$Cause <- change.cause(test.data$Cause)
-calibration.data$Cause <- change.cause(calibration.data$Cause)
-```
-
-# Implementing ReVAMP with Tariff
-
-We will demonstrate how to use the ReVAMP method with the Tariff
-training method for predicting COD from VA data. First we will train Tariff. 
+In this section, we will use our training data to build prediction models using
+the Tariff and InSilicoVA algorithms. First we will implement Tariff. 
 Note that the `data` argument is the data for which we want to obtain COD
-predictions for, which is both the calibration data and our test data.
+predictions for, which is both the calibration data and our test data (we 
+will use the calibration set for ReVAMP later in the vignette). When evaluating
+the performance of these algorithms, we will only do so on the predictions
+for the test data.
 
-```{r tariff_trainset}
+```{r tariff_train}
 set.seed(123)
-tariff.fit <- codeVA(data = rbind(calibration.data, test.data),
+tariff.train <- codeVA(data = rbind(calibration.data, test.data),
                      data.type = "customize", model = "Tariff",
                      data.train = train.data, causes.train = "Cause")
 ```
 
-We now need to extract three pieces of information for ReVAMP:
+We will now implement InSilicoVA.
 
-1. The individual COD predictions for the test set
-2. The individual COD predictions for the calibration set
-3. The gold-standard COD for the calibration set
+```{r insilico_train}
+set.seed(123)
+insilico.train <- codeVA(data = rbind(calibration.data, test.data),
+                         data.type = "customize", model = "InSilicoVA",
+                         data.train = train.data, causes.train = "Cause",
+                         jump.scale = 0.05, Nsim=5000, auto.length = FALSE)
+```
 
-Note that all of these must be character vectors
 
-```{r extract_information_tariff}
-pred.cod.tariff <- getTopCOD(tariff.fit)
-pred.cod.tariff <- as.character(pred.cod.tariff[,2])
-calib.cod.tariff <- pred.cod.tariff[1:nrow(calibration.data)]
-test.cod.tariff <- pred.cod.tariff[-(1:nrow(calibration.data))]
-calib.truth <- as.character(calibration.data$Cause)
+# Implementing ReVAMP with Individual Algorithms
+
+For simplicity, we will restrict ourselves to predicting the distribution for the
+top 3 COD (from Tanzania), and treat all other COD as "other". Because "Other Defined Causes of Child Deaths" is
+coded as cause 14, we will not include this cause in the Top 4. 
+
+We will extract predictions for the test and calibration set from both algorithms
+implemented above, and then change any prediction that is not in the top 3 COD 
+to other.
+
+```{r top_3_cod}
+top.cod <- names(sort(table(tanzania.data$Cause), decreasing = TRUE))
+top3.cod <- top.cod[top.cod != "14"][1:3]
+change.cause <- function(cause) {
+    cause <- as.character(cause)
+    cause[!(cause %in% top3.cod)] <- "99"
+    return(cause)
+}
+tariff.train.cod <- change.cause(getTopCOD(tariff.train)[,2])
+insilico.train.cod <- change.cause(getTopCOD(insilico.train)[,2])
+test.changedcod <- change.cause(test.data$Cause)
+calibration.changedcod <- change.cause(calibration.data$Cause)
+```
+
+Finally, we will separate out the InSilicoVA and Tariff predictions for
+the test and calibration sets.
+
+```{r separate_cod}
+tariff.train.cod.test <- tariff.train.cod[-(1:100)]
+tariff.train.cod.calib <- tariff.train.cod[1:100]
+insilico.train.cod.test <- insilico.train.cod[-(1:100)]
+insilico.train.cod.calib <- insilico.train.cod[1:100]
 ```
 
 We will now initiate hyper-parameter values for ReVAMP. These can be changed of course,
-but we have found these values work well. We will set the number of draws
-to 100,000. We recommend running multiple
-chains to check for convergence, but we will not do this in the vignette for computational efficiency. This can be done by setting a new seed before running the algorithm.
+but we have found these values work well. We will run 3  chains, obtaining 50,000 draws
+for each chains. Note that the order of the causes in the `causes` vector, 
+as this is the order in which ReVAMP will present the distribution of
+COD estimates.
 
 ```{r hyperparams}
-causes <- as.character(sort(unique(test.data$Cause)))
+causes <- as.character(sort(unique(test.changedcod)))
 epsilon <- .001
 alpha <- .001
 beta <- .001
@@ -120,251 +136,175 @@ tau.vec <- rep(tau, length(causes))
 delta <- 1
 gamma.init <- 1
 ndraws <- 50E3
+nchains <- 3
 ```
 
-We will run the `revamp.sampler` using the output from the Tariff model. We will only
-run one chain of the sampler in order to quickly compile the vignette.
+We will first run ReVAMP using the Tariff predictions.
 
 ```{r tariff_revamp}
-set.seed(1234)
-tariff.revamp <- revamp.sampler(test.cod = test.cod.tariff, calib.cod = calib.cod.tariff,
-                                calib.truth = calib.truth, causes = causes,
-                                epsilon = epsilon, alpha=alpha, beta=beta,
-                                tau.vec=tau.vec, delta=delta,
-                                gamma.init=gamma.init, ndraws = ndraws)
+set.seed(123)
+revamp.seeds <- sample(1e6, nchains, replace = F)
+tariff.revamp <- lapply(1:nchains, function(i) {
+    set.seed(revamp.seeds[i])
+    revamp.sampler(test.cod = tariff.train.cod.test, calib.cod = tariff.train.cod.calib,
+                   calib.truth = calibration.changedcod, causes = causes,
+                   epsilon = epsilon, alpha=alpha, beta=beta,
+                   tau.vec=tau.vec, delta=delta,
+                   gamma.init=gamma.init, ndraws = ndraws)
+})
 ```
 
+And now using the InSilicoVA predictions.
+
+```{r insilico_revamp}
+set.seed(123)
+revamp.seeds <- sample(1e6, nchains, replace = F)
+insilico.revamp <- lapply(1:nchains, function(i) {
+    set.seed(revamp.seeds[i])
+    revamp.sampler(test.cod = insilico.train.cod.test, calib.cod = insilico.train.cod.calib,
+                   calib.truth = calibration.changedcod, causes = causes,
+                   epsilon = epsilon, alpha=alpha, beta=beta,
+                   tau.vec=tau.vec, delta=delta,
+                   gamma.init=gamma.init, ndraws = ndraws)
+})
+```
+
+# Implementing Ensemble ReVAMP
+
+It may be advantageous to use predictions from multiple VA algorithms in order
+to inform ReVAMP predicted COD distributions. In this section, we will show
+how to implement the ReVAMP ensemble sampler.
+
+```{r revamp_ensemble}
+set.seed(123)
+revamp.seeds <- sample(1e6, nchains, replace = F)
+test.cod.mat <- matrix(c(tariff.train.cod.test,  insilico.train.cod.test), ncol = 2)
+calib.cod.mat <- matrix(c(tariff.train.cod.calib,  insilico.train.cod.calib), ncol = 2)
+ensemble.revamp <- lapply(1:nchains, function(i) {
+    set.seed(revamp.seeds[i])
+    revamp.ensemble.lite.sampler(test.cod.mat = test.cod.mat, calib.cod.mat = calib.cod.mat,
+                                 calib.truth = calibration.changedcod, causes = causes,
+                                 epsilon = epsilon, alpha=alpha, beta=beta,
+                                 tau.vec=tau.vec, delta=delta,
+                                 gamma.init=gamma.init, ndraws = ndraws)
+})
+```
 
 # Obtaining ReVAMP output
 
-The `revamp.sampler` output is a list of length `ndraws`. Each element in this list is itself a list, with each element containing a posterior draw for each parameter. We can inspect what this looks like.
+The `revamp.sampler` output is a list of length `ndraws`. Each element in this list is itself a list, with each element containing a posterior draw for each parameter. We can inspect what this looks like, from
+our first chain of the ReVAMP with Tariff sampler.
 
 ```{r inspect_posterior}
-tariff.revamp[[5000]]
+tariff.revamp[[1]][[5000]]
 ```
 
 The most important parameters are the $p_{i}$, which is the true CSMF for COD $i$.
 The $i$th element in $p_{i}$ refers to the $i$th element in the `causes` input
 of `revamp.sampler`.
 
-We can extract these parameter estimates using the `revampCSMF` function and then plot the posterior densities versus
-the true CSMF in the test set. We will use a burn-in of 2,000 and thin the draws by 5.
+We can extract these parameter estimates using the `revampCSMF` function and then plot the posterior densities versus the true CSMF in the test set. We will use a burn-in of 10,000 and thin the draws by 10.
 
-```{r post_dens_plot, fig.width = 6, fig.height = 6}
+```{r extract_csmf}
+burnin <- 10E3
+thin <- 10
+
+tariff.revamp.csmf.list <- lapply(1:nchains, function(i) {
+    revampCSMF(tariff.revamp[[i]], burnin = burnin, thin = thin)
+})
+tariff.revamp.csmf.df <- do.call(rbind, tariff.revamp.csmf.list)
+
+insilico.revamp.csmf.list <- lapply(1:nchains, function(i) {
+    revampCSMF(insilico.revamp[[i]], burnin = burnin, thin = thin)
+})
+insilico.revamp.csmf.df <- do.call(rbind, insilico.revamp.csmf.list)
+
+ensemble.revamp.csmf.list <- lapply(1:nchains, function(i) {
+    revampCSMF(ensemble.revamp[[i]], burnin = burnin, thin = thin)
+})
+ensemble.revamp.csmf.df <- do.call(rbind, ensemble.revamp.csmf.list)
+
+```
+
+We can plot the posterior distribution of CSMF estimates from our ReVAMP with
+Tariff sample. We will show the true CSMF in red, and the estimated CSMF
+from just Tariff in blue.
+
+```{r post_tariff_dens_plot, fig.width = 6, fig.height = 6}
 library(ggplot2)
 library(dplyr)
-burnin <- 20E3
-thin <- 5
 
-tariff.revamp.csmf <- revampCSMF(tariff.revamp, burnin = burnin, thin = thin)
-
-true.p <- prop.table(table(test.data$Cause))
+true.p <- prop.table(table(change.cause(tanzania.data$Cause)))
 true.p <- data.frame(p = unname(as.vector(true.p)), cause = names(true.p))
+tariff.p <- prop.table(table(tariff.train.cod.test))
+tariff.p <- data.frame(p = unname(as.vector(tariff.p)), cause = names(tariff.p))
 ggplot() +
-    geom_density(data = tariff.revamp.csmf, aes(p)) +
+    geom_density(data = tariff.revamp.csmf.df, aes(p)) +
     geom_vline(data = true.p, aes(xintercept = p), colour = 'red') +
+    geom_vline(data = tariff.p, aes(xintercept = p), colour = 'blue') +
     facet_wrap(~cause, scales = "free_y") +
     xlim(0, 1)
 ```
 
-We can also compare the CSMF Accuracy of the ReVAMP method to that of Tariff, where we define
-CSMF Accuracy as 
+# Comparing algorithm accuracy
+
+A common metric for comparing CSMF predictions is CSMF Accuracy, which is defined as 
 
 $$
 CSMF_{acc} = 1 - \frac{\sum_{i=1}^{C} (CSMF_{i} - CSMF_{i}^{(true)})}{2(1 - \text{min}\{CSMF^{(true)}\})}
 $$
 
 
-To obtain estimates of the CSMFs, we will use the marginal posterior modes from the 
-posterior draws.
+To obtain estimates of the CSMFs, we will use the marginal posterior means from the 
+posterior draws. We will first write functions to obtain the point predictions
+from ReVAMP, Tariff, and InSilicoVA.
 
-```{r}
-getCSMFEstimate <- function(revamp.csmf.df, causes) {
-    sapply(causes, function(c) {
+```{r csmf_functions}
+revampCSMFMeanEstimate <- function(revamp.csmf.df, causes) {
+    csmf.init <- sapply(causes, function(c) {
         revamp.cause <- revamp.csmf.df[revamp.csmf.df$cause == c,]
-        dens <- density(revamp.cause$p)
-        return(dens$x[which.max(dens$y)])
+        return(mean(revamp.cause$p))
     })
+    return(csmf.init)
 }
 
-csmf.tariff <- sapply(causes, function(c) mean(test.cod.tariff == c))
-csmf.tariff.revamp <- getCSMFEstimate(tariff.revamp.csmf, causes)
-csmf.test <- sapply(causes, function(c) mean(test.data$Cause == c))
-tariff.csmf.acc <- getCSMF_accuracy(csmf.tariff, csmf.test)
-revamp.csmf.acc <- getCSMF_accuracy(csmf.tariff.revamp, csmf.test)
-
-tariff.csmf.acc
-revamp.csmf.acc
-```
-
-And we see that using `ReVAMP` leads to an improvement in CSMF accuracy.
-
-# Ensemble ReVAMP
-
-In practice, we may not want to rely on the COD estimated from just Tariff. Instead,
-we may want to combine Tariff estimates with those of another algorithm such as
-InsilicoVA. Furthermore, we can use the ReVAMP methodology to use both of these modeling
-strategies.
-
-We will first use InSilicoVA to get individual COD estimates for both our
-calibration and test sets, as we did for Tariff.
-
-```{r insilico_train}
-set.seed(1234)
-insilico.fit <- codeVA(data = rbind(calibration.data, test.data),
-                         data.type = "customize", model = "InSilicoVA",
-                         data.train = train.data, causes.train = "Cause",
-                         jump.scale = 0.05, Nsim=5000, auto.length = FALSE)
-pred.cod.insilico <- getTopCOD(insilico.fit)
-pred.cod.insilico <- as.character(pred.cod.insilico[,2])
-calib.cod.insilico <- pred.cod.insilico[1:nrow(calibration.data)]
-test.cod.insilico <- pred.cod.insilico[-(1:nrow(calibration.data))]
-```
-
-We can quickly run ReVAMP with the InSilicoVA predictions to observe
-differences between InSilicoVA and Tariff with ReVAMp
-
-```{r}
-set.seed(1234)
-insilico.revamp <- revamp.sampler(test.cod = test.cod.insilico, calib.cod = calib.cod.insilico,
-                                  calib.truth = calib.truth, causes = causes,
-                                  epsilon = epsilon, alpha=alpha, beta=beta,
-                                  tau.vec=tau.vec, delta=delta,
-                                  gamma.init=gamma.init, ndraws = ndraws)
-```
-
-```{r plot_insilico_revamp}
-insilico.revamp.csmf <- revampCSMF(insilico.revamp, burnin = burnin, thin = thin)
-
-ggplot() +
-    geom_density(data = insilico.revamp.csmf , aes(p)) +
-    geom_vline(data = true.p, aes(xintercept = p), colour = 'red') +
-    facet_wrap(~cause, scales = "free_y")
-```
-
-We can inspect the CSMF accuracies again
-
-```{r}
-csmf.insilico <- sapply(causes, function(c) mean(test.cod.insilico == c))
-csmf.revamp.insilico <- getCSMFEstimate(insilico.revamp.csmf, causes)
-insilico.csmf.acc <- getCSMF_accuracy(csmf.insilico, csmf.test)
-revamp.insilico.csmf.acc <- getCSMF_accuracy(csmf.revamp.insilico, csmf.test)
-insilico.csmf.acc
-revamp.insilico.csmf.acc
-```
-
-We now have to format the predictions from Tariff and InSilicoVA for the `revamp.ensemble.sampler` function.
-
-```{r format_ensemble}
-test.cod.mat <- matrix(c(test.cod.tariff, test.cod.insilico), ncol = 2)
-calib.cod.mat <- matrix(c(calib.cod.tariff, calib.cod.insilico), ncol = 2)
-```
-
-And we now we can run the function using nearly identical arguments to that of the
-`revamp.sampler` function. We will reduce the number of draws, since this is a more
-computationally intensive procedure.
-
-```{r revamp_ensemble}
-set.seed(1234)
-ensemble.revamp <- revamp.ensemble.sampler(test.cod.mat = test.cod.mat,
-                                           calib.cod.mat = calib.cod.mat,
-                                           calib.truth = calib.truth, causes = causes,
-                                           epsilon = epsilon, alpha=alpha, beta=beta,
-                                           tau.vec=tau.vec, delta=delta,
-                                           gamma.init=gamma.init, ndraws = 10000)
-```
-
-And we can again plot the posterior density for the ensemble CSMF estimates.
-
-```{r plot_ensemble_csmf}
-burnin <- 2E3
-thin <- 5
-
-ensemble.revamp.csmf <- revampCSMF(ensemble.revamp, burnin = burnin, thin = thin)
-
-ggplot() +
-    geom_density(data = ensemble.revamp.csmf , aes(p)) +
-    geom_vline(data = true.p, aes(xintercept = p), colour = 'red') +
-    facet_wrap(~cause, scales = "free_y")
-```
-
-And finally we can get the CSMF accuracy for our ensemble method:
-
-```{r csmf_accuracy_ensemble}
-csmf.revamp.ensemble <- sapply(causes, function(c) mean(ensemble.revamp.csmf$p[ensemble.revamp.csmf$cause == c]))
-revamp.ensemble.csmf.acc <- getCSMF_accuracy(csmf.revamp.ensemble, csmf.test)
-revamp.ensemble.csmf.acc
-```
-
-Which appears to be a dramatic increase in accuracy from either of the two
-individual methods + ReVAMP
-
-# Individual predictions with ReVAMP
-
-We will obtain individual predictions from all three ReVAMP methods using either the `revampIndPredictions`
-function or the `revampEnsembleIndPredictions` function, based on whether we used ensemble calibration. These functions take in the posterior samples from either the `revamp.sampler` or `revamp.ensemble.sampler` function, 
-as well as the COD predictions (either a vector for an individual algorith or a matrix for the ensemble method) for the test subjects. It also takes in the causes argument discussed previously, as well as
-burn-in and thin arguments.
-
-```{r obtain_indiv_cod}
-tariff.revamp.ind.cod <- revampIndPredictions(tariff.revamp, test.cod = test.cod.tariff,
-                                       causes = causes, burnin = 20000, thin = 5)$topCOD
-insilico.revamp.ind.cod <- revampIndPredictions(insilico.revamp, test.cod = test.cod.insilico,
-                                       causes = causes, burnin = 20000, thin = 5)$topCOD
-ensemble.revamp.ind.cod <- revampEnsembleIndPredictions(ensemble.revamp, test.cod.mat = test.cod.mat,
-                                                        causes = causes,burnin = 2000, thin = 5)$topCOD
-```
-
-We can now look at the chance-corrected concordance (CCC) metric for measuring how
-well each algorithm performs in individual predictions. We define the CCC
-for cause j as:
-
-$$
-CCC_{j} = \frac{\frac{\text{# correctly assigned to cause j}}{\text{# total number of death from cause j}} - \frac{1}{C}}{1 - \frac{1}{C}}
-$$
-
-We first have to write a custom function to estimate the CCC
-
-```{r ccc_function}
-ccc <- function(cod.est, cod.truth, causes) {
-    C <- length(causes)
-    ccc <- sapply(seq_along(causes), function(j) {
-        cause.j <- causes[j]
-        correct.assign <- sum(cod.est == cause.j & cod.truth == cause.j)
-        total <- sum(cod.truth == cause.j)
-        if(total == 0) {
-            total <- 1
-        }
-        numerator <- (correct.assign / total) - (1 / C)
-        denominator <- 1 - (1 / C)
-        return(numerator / denominator)
-    })
+openVACSMF <- function(topcod, causes) {
+    csmf <- sapply(causes, function(c) mean(topcod == c))
+    return(csmf)
 }
 ```
 
-And now we will estimate the CCC for all 5 of the methods we have tried
+We will now obtain these CSMF estimates, using the causes defined in the code 
+block where we set the ReVAMP hyperparameter values.
 
-```{r}
-tariff.ccc <- ccc(test.cod.tariff, as.character(test.data$Cause), causes)
-insilico.ccc <- ccc(test.cod.insilico, as.character(test.data$Cause), causes)
-tariff.revamp.ccc <- ccc(tariff.revamp.ind.cod, as.character(test.data$Cause), causes)
-insilico.revamp.ccc <- ccc(insilico.revamp.ind.cod, as.character(test.data$Cause), causes)
-ensemble.revamp.ccc <- ccc(ensemble.revamp.ind.cod, as.character(test.data$Cause), causes)
+```{r obtain_csmf}
+tariff.revamp.csmf <- revampCSMFMeanEstimate(tariff.revamp.csmf.df, causes)
+insilico.revamp.csmf <- revampCSMFMeanEstimate(insilico.revamp.csmf.df, causes)
+ensemble.revamp.csmf <- revampCSMFMeanEstimate(ensemble.revamp.csmf.df, causes)
+tariff.train.csmf <- openVACSMF(tariff.train.cod.test, causes)
+insilico.train.csmf <- openVACSMF(insilico.train.cod.test, causes)
 ```
 
-We will now list the individual CCC along with the true CSMF
+Finally, we will obtain and display the CSMF accuracy for these 5 methods.
 
-```{r}
-true.p
-tariff.ccc
-insilico.ccc
-tariff.revamp.ccc
-insilico.revamp.ccc
-ensemble.revamp.ccc
+```{r csmf_accuracy}
+methods <- c("tariff_revamp",
+             "insilico_revamp",
+             "ensemble_revamp",
+             "tariff_train",
+             "insilico_train")
+ptrue <- sapply(causes, function(c) mean(change.cause(tanzania.data$Cause) == c))
+csmf.acc.df <- data.frame(csmf.acc = c(getCSMF_accuracy(tariff.revamp.csmf, ptrue),
+                                       getCSMF_accuracy(insilico.revamp.csmf, ptrue),
+                                       getCSMF_accuracy(ensemble.revamp.csmf, ptrue),
+                                       getCSMF_accuracy(tariff.train.csmf, ptrue),
+                                       getCSMF_accuracy(insilico.train.csmf, ptrue)),
+                          method = methods)
+csmf.acc.df
 ```
 
-While we see that in this example, ReVAMP has as low CCC for causes with a low CSMF, it outperforms
-Tariff quite significantly for the more common causes of death. It appears that InSilicoVA
-performs quite well in this example, and is about on par with ReVAMP.
-
-
+We see two interesting observations. First, all three ReVAMP methods
+substantially outperform Tariff and InSilicoVA in terms of CSMF accuracy. Second,
+The CSMF accuracy of the ensemble method of ReVAMP falls right in the middle of 
+the CSMF accuracies of Tariff and ReVAMP. This indicates that it is a useful method
+to use, as it is always unknown whether Tariff or InSilicoVA will be the best performing algorithm.
