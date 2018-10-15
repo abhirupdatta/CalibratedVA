@@ -757,7 +757,6 @@ revampEnsembleLiteIndPredictions <- function(revamp.samples, test.cod.mat, cause
 #' 
 #' @import Rsolnp
 #' 
-#' @export
 mle.calibration <- function(test.cod, calib.cod, calib.truth, causes) {
   ### all arguments should be character vectors
   ### 
