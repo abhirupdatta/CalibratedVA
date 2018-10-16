@@ -3,6 +3,7 @@ title: "ReVAMP"
 author: "Jacob Fiksel and Abhirup Datta"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
+bibliography: bibliography.bib
 vignette: >
   %\VignetteIndexEntry{Vignette Title}
   %\VignetteEngine{knitr::rmarkdown}
@@ -13,23 +14,25 @@ vignette: >
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
-  message = FALSE
+  message = FALSE,
+  cache = TRUE
 )
 ```
 
-# Introduction
+## Introduction
 
-In many countries, it is infeasible to conduct full autopsies for each death, due to economic or infrastructural limitations. Consequently, national or sub-national statistics produced on cause-specific mortality numbers for many of these countries rely on data from verbal autopsy (VA) surveys. The VA data supplemented with physicians’ opinions or full autopsy reports for a smaller subset of the deaths are used to determine prediction rules that can ascertain a cause of death (COD) solely based on the VA report of an individual. Approaches to specify these rules include non-statistical algorithms including Tariff, InterVA and EAVA and more formal model based approaches like InsillicoVA that endows the prediction problem with a proper probabilistic framework allowing coherent statistical inference. To create the prediction algorithm, all of these approaches require a substantial training dataset, where both the VA reports and the true gold standard cause of deaths, either the full autopsies or the physicians' opinions are available.
+In many countries, it is infeasible to conduct full autopsies for the majority of deaths due to economic and infrastructural limitations, and/or religious or cultural prohibitions against autopsies [@abouzahr2015civil; @allotey2015let]. An alternative method to infer the cause (or "etiology") of death (COD) is to conduct *verbal autopsy* (VA) --  a systematic interview of the relatives of the deceased individual to obtain information about symptoms observed prior to death [@soleman2006verbal]. The reported symptoms in the VA can then be assessed by a group of physicians who assign the likely cause(s) of death.
+
+While *physician coded* VA is a useful alternative to full autopsies, scaling the process to the regional or national level is challenging. Consequently, over the last decade several data-driven solutions have been proposed that replace the physician coding with artificial intelligence software. These *computer coded* VA (CCVA) algorithms predict COD using the VA records as input. Examples include Tariff [@tariff; @tariff2], interVA [@interva], and InsilicoVA [@insilico]. To create the prediction algorithm, all of these approaches require a substantial training dataset, where both the VA reports and the true gold standard cause of deaths, either the full autopsies or the physicians' opinions are available.
 
 The ReVAMP (Regularized Verbal Autopsy based Mortality Prediction) package is to be used
-when a limited amount of gold standard cause of death data is available for a new country. 
-Rather than train one of the existing algorithms on the extremely small gold standard data set, our algorithm uses a hierarchical Bayesian model in order to leverage the large amount of
-PHMRC VA data available from other countries in informing CSMF estimates.
+when a limited amount of gold standard (GS) cause of death data is available for a new country. 
+ReVAMP implements a general calibration framework for obtaining population CSMF estimates in a new country using countrywide VA records and a limited amount of local GS data with the true COD. Our calibration approach is to first use one or more CCVA algorithms trained on non-local GS information, then use limited local GS data to update the initial CSMF to arrive at an improved final estimate.
 
-# Obtaining and splitting the PHMRC data
+## PHMRC Data
 
-In this vignette, we will use the `openVA` package to obtain PHMRC data and implement 
-the Tariff algorithm. We will of course also have to load the `ReVAMP` package.
+The Population Health Metrics Research Consortium (PHMRC) study, conducted in 4 countries across six sites, is a benchmark database of paired VA records and GS-COD of children, neonates and adults. PHMRC data is frequently used to assess performance of CCVA algorithms. In this vignette, we will use the `openVA` package to obtain PHMRC data and implement the Tariff and InSilicoVA algorithms. We will of course also have to load the `ReVAMP` package.
+
 
 ```{r load_pkgs}
 library(openVA)
@@ -37,16 +40,15 @@ library(ReVAMP)
 ```
 
 We will now load in the PHMRC child data and use the `ConvertData.phmrc` function
-to convert the data into the appropriate structure for Tariff.
+to convert the data into the appropriate structure for Tariff and InSilicoVA.
 
 ```{r convert_data}
 child.raw <- read.csv(getPHMRC_url("child"))
 child.clean <- ConvertData.phmrc(child.raw, phmrc.type = "child")$output
 ```
 
-We will split the PHMRC data from Tanzania into a calibration and test set,
-and use the rest of the PHMRC data as our training set. We will use a calibration
-set size of 100.
+To demonstrate how to implement ReVAMP, we will first treat Tanzania as our country of interest
+for obtaining accurate CSMF estimates. We will split the PHMRC data from Tanzania into a hospital (calibration) and population (test) set, and use the rest of the PHMRC data as our gold standard (training) set. We will use a calibration set size of 100.
 
 ```{r split_data}
 countries <- ifelse(child.raw$site %in% c("Dar", "Pemba"), "Tanzania", "Other")
@@ -58,7 +60,7 @@ calibration.data <- tanzania.data[calibration.indices,]
 test.data <- tanzania.data[-calibration.indices,]
 ```
 
-# Implementing individual VA algorithms
+## Implementing Tariff and InSilicoVA
 
 In this section, we will use our training data to build prediction models using
 the Tariff and InSilicoVA algorithms. First we will implement Tariff. 
@@ -86,7 +88,7 @@ insilico.train <- codeVA(data = rbind(calibration.data, test.data),
 ```
 
 
-# Implementing ReVAMP with Individual Algorithms
+## Implementing ReVAMP with Individual Algorithms
 
 For simplicity, we will restrict ourselves to predicting the distribution for the
 top 3 COD (from Tanzania), and treat all other COD as "other". Because "Other Defined Causes of Child Deaths" is
@@ -169,11 +171,9 @@ insilico.revamp <- lapply(1:nchains, function(i) {
 })
 ```
 
-# Implementing Ensemble ReVAMP
+## Implementing Ensemble ReVAMP
 
-It may be advantageous to use predictions from multiple VA algorithms in order
-to inform ReVAMP predicted COD distributions. In this section, we will show
-how to implement the ReVAMP ensemble sampler.
+The previous section clearly reveals that REVAMP can use the output from any CCVA algorithm. Several CCVA algorithms have been implemented in publicly available software; in any particular analysis, the optimal CCVA is unknown. For example, in the above implentation, if our population (test) set had not already been labeled with the GS COD, we would not know whether it would be best to implement ReVAMP with Tariff or InSilicoVA. In the code below, we show how to implement the Independent ReVAMP Ensemble Model, which uses the predictions from multiple VA-based algorithms. We use output from the Tariff and InSilicoVA models built in the previous section.
 
 ```{r revamp_ensemble}
 set.seed(123)
@@ -190,10 +190,9 @@ ensemble.revamp <- lapply(1:nchains, function(i) {
 })
 ```
 
-# Obtaining ReVAMP output
+## Obtaining ReVAMP output
 
-The `revamp.sampler` output is a list of length `ndraws`. Each element in this list is itself a list, with each element containing a posterior draw for each parameter. We can inspect what this looks like, from
-our first chain of the ReVAMP with Tariff sampler.
+The `revamp.sampler` (or `revamp.ensemble.lite.sampler`) output is a list of length `ndraws`. Each element in this list is itself a list, with each element containing a posterior draw for each parameter. We can inspect what this looks like, from our first chain of the ReVAMP with Tariff sampler.
 
 ```{r inspect_posterior}
 tariff.revamp[[1]][[5000]]
@@ -246,7 +245,7 @@ ggplot() +
     xlim(0, 1)
 ```
 
-# Comparing algorithm accuracy
+## Comparing algorithm accuracy
 
 A common metric for comparing CSMF predictions is CSMF Accuracy, which is defined as 
 
@@ -254,6 +253,7 @@ $$
 CSMF_{acc} = 1 - \frac{\sum_{i=1}^{C} (CSMF_{i} - CSMF_{i}^{(true)})}{2(1 - \text{min}\{CSMF^{(true)}\})}
 $$
 
+where $CSMF_{i}$ and $CSMF_{i}^{(true)}$ are the estimated and true percentages, respectively, of the population for which the GS COD is cause $i$, $i=1, \ldots, C$.
 
 To obtain estimates of the CSMFs, we will use the marginal posterior means from the 
 posterior draws. We will first write functions to obtain the point predictions
@@ -308,3 +308,5 @@ substantially outperform Tariff and InSilicoVA in terms of CSMF accuracy. Second
 The CSMF accuracy of the ensemble method of ReVAMP falls right in the middle of 
 the CSMF accuracies of Tariff and ReVAMP. This indicates that it is a useful method
 to use, as it is always unknown whether Tariff or InSilicoVA will be the best performing algorithm.
+
+## References
