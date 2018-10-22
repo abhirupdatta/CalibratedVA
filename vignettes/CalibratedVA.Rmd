@@ -27,14 +27,13 @@ use these VA responses to determine the COD for an individual.
 If we are interested in obtaining causes of death for a large amount of individuals in a
 region or country, in order to determine optimal resource allocation, we need an efficient
 way to scale the process of determining the COD from VA data. Several algorithms have
-recently been proposed to automatically predict COD from VA records. These *computer coded* VA (CCVA) algorithms predict COD using the VA records as input. Examples include Tariff [@tariff; @tariff2], interVA [@interva], and InsilicoVA [@insilico]. These algorithms all require datasets with both VA symptom data and
-a gold standard (GS) COD determined for each individual.
+recently been proposed to automatically predict COD from VA records. These *computer coded* VA (CCVA) algorithms predict COD using the VA records as input. Examples include Tariff [@tariff; @tariff2], interVA [@interva], and InsilicoVA [@insilico]. These algorithms all require some gold standard (GS) information -- either a training dataset with both VA symptom data and
+a gold standard (GS) COD determined for each individual or some symptom-given-cause probability matrix.
 
 
-If we are interested in obtaining population cause specific mortality fraction (CSMF), we can 
-train one of the above algorithms with GS COD data from our country of interest,
-obtain individual predictions from VA data for our
-country of interest, and then aggregate the predictions to the CSMF level. However,
+If we are interested in obtaining national estimates of cause specific mortality fraction (CSMF), we can 
+train one of the above CCVA algorithms with GS COD data from our country of interest,
+obtain individual predictions from CCVA data for the country of interest, and then aggregate the predictions to the CSMF level. However,
 there may be limited amounts of GS COD data for a new country. In addition,
 algorithms trained on GS COD from other countries may not be as accurate.
 
@@ -42,7 +41,7 @@ algorithms trained on GS COD from other countries may not be as accurate.
 The CalibratedVA package is to be used for exactly the situation above--
 we take predictions from one or multiple algorithm(s) trained on a large 
 non-local dataset, and use the local GS COD dataset to improve the
-CSMF estimates.
+CSMF estimates via local calibration.
 
 ## PHMRC Data
 
