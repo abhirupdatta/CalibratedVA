@@ -1,6 +1,6 @@
-Package: ReVAMP
+Package: CalibratedVA
 Type: Package
-Title: ReVAMP: Regularized Verbal Autopsy based Mortality Prediction.
+Title: CalibratedVA
 Version: 0.1.0
 Author: Jacob Fiksel and Abhirup Datta
 Maintainer: Jacob Fiksel <jfiksel@gmail.com>

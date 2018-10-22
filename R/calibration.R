@@ -219,7 +219,7 @@ sample.gamma2 <- function(gamma.vec, epsilon, alpha, beta, M, tau.vec, max.gamma
 }
 
 #' @title Performs Gibbs sampling for calibration
-#' @description \code{revamp.sampler} takes in estimation of the underlying
+#' @description \code{calibva.sampler} takes in estimation of the underlying
 #' cause of death distribution from training data, as well as a transition
 #' matrix based on calibration data. Along with the prior values,
 #' it will return a list of posterior samples for parameters of interest
@@ -248,7 +248,7 @@ sample.gamma2 <- function(gamma.vec, epsilon, alpha, beta, M, tau.vec, max.gamma
 #' @import MCMCpack
 #'
 #' @export
-revamp.sampler <- function(test.cod, calib.cod, calib.truth, causes,
+calibva.sampler <- function(test.cod, calib.cod, calib.truth, causes,
                            epsilon, alpha, beta, tau.vec, delta,
                            gamma.init, ndraws, max.gamma = 75) {
   v <- sapply(causes, function(c) sum(test.cod == c))
@@ -290,12 +290,12 @@ revamp.sampler <- function(test.cod, calib.cod, calib.truth, causes,
   return(post.samples)
 }
 
-#' @title collect CSMF estimates from the ReVAMP sampler
-#' @description \code{revampCSMF} collects draws of the CSMF estimates
-#' after running the \code{revamp.sampler} function, using the
+#' @title collect CSMF estimates from the CalibVA sampler
+#' @description \code{calibvaCSMF} collects draws of the CSMF estimates
+#' after running the \code{calibva.sampler} function, using the
 #' user supplied burn-in and thinning parameters
 #' 
-#' @param revamp.samples a list returned from \code{revamp.sampler}
+#' @param revamp.samples a list returned from \code{caliva.sampler}
 #' @param burnin an integer specifying the number of draws you wish to discard
 #' before collecting draws. Default is 1,000
 #' @param thin an integer specifying the amount the draws should be thinned by
@@ -304,10 +304,10 @@ revamp.sampler <- function(test.cod, calib.cod, calib.truth, causes,
 #' for each of the draws that are obtained
 #' 
 #' @export
-revampCSMF <- function(revamp.samples, burnin = 1E3, thin = 5) {
-  causes <- names(revamp.samples[[1]]$p)
-  post.p <- lapply(seq(burnin, length(revamp.samples), by = thin), function(i) {
-    draw.p <- revamp.samples[[i]]$p
+calibvaCSMF <- function(calibva.samples, burnin = 1E3, thin = 5) {
+  causes <- names(calibva.samples[[1]]$p)
+  post.p <- lapply(seq(burnin, length(calibva.samples), by = thin), function(i) {
+    draw.p <- calibva.samples[[i]]$p
     return(data.frame(p = draw.p, cause = causes, draw = i))
   })
   return(do.call(rbind, post.p))
@@ -320,7 +320,7 @@ revampCSMF <- function(revamp.samples, burnin = 1E3, thin = 5) {
 ### causes should be a vector of the causes one is interested in
 
 #' @title Performs Gibbs sampling for ensemble calibration 
-#' @description \code{revamp.ensemble.sampler} takes in the top estimated COD
+#' @description \code{calibva.ensemble.sampler} takes in the top estimated COD
 #' for each subject in the training data, as well as the calibration data.
 #' Along with the prior values, it will return a list of posterior samples
 #' for parameters of interest
@@ -349,7 +349,7 @@ revampCSMF <- function(revamp.samples, burnin = 1E3, thin = 5) {
 #' @import MCMCpack
 #'
 #' @export
-revamp.ensemble.sampler <- function(test.cod.mat, calib.cod.mat, calib.truth, causes,
+calibva.ensemble.sampler <- function(test.cod.mat, calib.cod.mat, calib.truth, causes,
                                     epsilon, alpha, beta, tau.vec, delta,
                                     gamma.init, ndraws, max.gamma = 75) {
   ### first get matrix of all combinations of j, where the j vector forms the rows
@@ -442,7 +442,7 @@ revamp.ensemble.sampler <- function(test.cod.mat, calib.cod.mat, calib.truth, ca
 ### causes should be a vector of the causes one is interested in
 
 #' @title Performs Gibbs sampling for ensemble.lite calibration 
-#' @description \code{revamp.ensemble.lite.sampler} takes in the top estimated COD
+#' @description \code{calibva.ensemble.lite.sampler} takes in the top estimated COD
 #' for each subject in the training data, as well as the calibration data.
 #' Along with the prior values, it will return a list of posterior samples
 #' for parameters of interest
@@ -471,7 +471,7 @@ revamp.ensemble.sampler <- function(test.cod.mat, calib.cod.mat, calib.truth, ca
 #' @import MCMCpack
 #'
 #' @export
-revamp.ensemble.lite.sampler <- function(test.cod.mat, calib.cod.mat, calib.truth, causes,
+calibva.ensemble.lite.sampler <- function(test.cod.mat, calib.cod.mat, calib.truth, causes,
                                     epsilon, alpha, beta, tau.vec, delta,
                                     gamma.init, ndraws, max.gamma = 75) {
   ### first get matrix of all combinations of j, where the j vector forms the rows
@@ -567,15 +567,15 @@ revamp.ensemble.lite.sampler <- function(test.cod.mat, calib.cod.mat, calib.trut
 
 
 #' @title Obtains individual COD predictions based on posterior samples
-#' @description \code{revampIndPredictions} uses posterior samples from the ReVAMP
+#' @description \code{calibvaIndPredictions} uses posterior samples from the CalibVA
 #' hierarchical bayesian model to obtain the posterior probability for each individual 
 #' dying of given causes, conditional on predictions from a single algorithm
 #' 
-#' @param revamp.samples a list of posterior samples obtained from \code{revamp.sampler}
+#' @param calibva.samples a list of posterior samples obtained from \code{calibva.sampler}
 #' @param test.cod a character vector containing the predicted COD from the algorithm
-#' for each subject in the test set. This should be the same as the argument supplied to \code{revamp.sampler}
+#' for each subject in the test set. This should be the same as the argument supplied to \code{calibva.sampler}
 #' @param causes is a character vector with the names of the causes you are interested in.
-#' This should be the same as the argument supplied to \code{revamp.sampler}
+#' This should be the same as the argument supplied to \code{calibva.sampler}
 #' @param burnin an integer specifying the number of draws you wish to discard
 #' before collecting draws. Default is 1,000
 #' @param thin an integer specifying the amount the draws should be thinned by
@@ -586,14 +586,14 @@ revamp.ensemble.lite.sampler <- function(test.cod.mat, calib.cod.mat, calib.trut
 #' probability of individual i dying from cause j
 #' 
 #' @export
-revampIndPredictions <- function(revamp.samples, test.cod, causes, burnin = 1E3, thin = 5) {
+calibvaIndPredictions <- function(calibva.samples, test.cod, causes, burnin = 1E3, thin = 5) {
   prediction.mat <- matrix(NA, nrow = length(causes), ncol = length(causes))
   ### create a prediction mapping matrix where entry i, j denotes
   ### P(truth  = i | guess = j)
   for(i in 1:nrow(prediction.mat)) {
     for(j in 1:ncol(prediction.mat)){
-      post.samples <- sapply(seq(burnin, length(revamp.samples), by = thin), function(draw) {
-        x <- revamp.samples[[draw]]
+      post.samples <- sapply(seq(burnin, length(calibva.samples), by = thin), function(draw) {
+        x <- calibva.samples[[draw]]
         M <- x$M
         p <- x$p
         num <- M[i, j] * p[i]
@@ -615,17 +615,17 @@ revampIndPredictions <- function(revamp.samples, test.cod, causes, burnin = 1E3,
   return(list(topCOD = topCOD, ind.probabilities = ind.predictions))
 }
 
-#' @title Obtains individual COD predictions based on posterior samples from the ensemble ReVAMP method
-#' @description \code{revampIndPredictions} uses posterior samples from the ReVAMP
+#' @title Obtains individual COD predictions based on posterior samples from the ensemble CalibVA method
+#' @description \code{calibVAIndPredictions} uses posterior samples from the CalibVA
 #' hierarchical bayesian model to obtain the posterior probability for each individual 
 #' dying of given causes, conditional on predictions from multiple algorithms
 #' 
-#' @param revamp.samples a list of posterior samples obtained from \code{revamp.ensemble.sampler}
+#' @param calibVA.samples a list of posterior samples obtained from \code{calibVA.ensemble.sampler}
 #' @param test.cod.mat will be a N x K matrix, with entry i,j denoting estimated
 #' COD (as a character)for indiv. i by alg. j This should be the same as the argument 
-#' supplied to \code{revamp.ensemble.sampler}
+#' supplied to \code{calibVA.ensemble.sampler}
 #' @param causes is a character vector with the names of the causes you are interested in.
-#' This should be the same as the argument supplied to \code{revamp.ensemble.sampler}
+#' This should be the same as the argument supplied to \code{calibVA.ensemble.sampler}
 #' @param burnin an integer specifying the number of draws you wish to discard
 #' before collecting draws. Default is 1,000
 #' @param thin an integer specifying the amount the draws should be thinned by
@@ -636,7 +636,7 @@ revampIndPredictions <- function(revamp.samples, test.cod, causes, burnin = 1E3,
 #' probability of individual i dying from cause j
 #' 
 #' @export
-revampEnsembleIndPredictions <- function(revamp.samples, test.cod.mat, causes, burnin = 1E3, thin = 5) {
+calibVAEnsembleIndPredictions <- function(calibVA.samples, test.cod.mat, causes, burnin = 1E3, thin = 5) {
   K <- ncol(test.cod.mat)
   C <- length(causes)
   j.mat <- expand.grid(lapply(1:K, function(k) causes), stringsAsFactors = FALSE)
@@ -646,8 +646,8 @@ revampEnsembleIndPredictions <- function(revamp.samples, test.cod.mat, causes, b
   ### predction.mat[i,j] = pr(g_r = i | a_r^(1) == j_1,...,a_r^(K) == j_K)
   for(i in 1:nrow(prediction.mat)) {
     for(j in 1:ncol(prediction.mat)){
-      post.samples <- sapply(seq(burnin, length(revamp.samples), by = thin), function(draw) {
-        x <- revamp.samples[[draw]]
+      post.samples <- sapply(seq(burnin, length(calibVA.samples), by = thin), function(draw) {
+        x <- calibVA.samples[[draw]]
         U <- x$U
         ### Index rows of U by j, columns by cause (i)
         p <- x$p
@@ -671,17 +671,17 @@ revampEnsembleIndPredictions <- function(revamp.samples, test.cod.mat, causes, b
   return(list(topCOD = topCOD, ind.probabilities = ind.predictions))
 }
 
-#' @title Obtains individual COD predictions based on posterior samples from the ensemble.lite ReVAMP method
-#' @description \code{revampIndPredictions} uses posterior samples from the ReVAMP
+#' @title Obtains individual COD predictions based on posterior samples from the ensemble.lite CalibVA method
+#' @description \code{calibVAIndPredictions} uses posterior samples from the CalibVA
 #' hierarchical bayesian model to obtain the posterior probability for each individual 
 #' dying of given causes, conditional on predictions from multiple algorithms
 #' 
-#' @param revamp.samples a list of posterior samples obtained from \code{revamp.ensemble.lite.sampler}
+#' @param calibVA.samples a list of posterior samples obtained from \code{calibVA.ensemble.lite.sampler}
 #' @param test.cod.mat will be a N x K matrix, with entry i,j denoting estimated
 #' COD (as a character)for indiv. i by alg. j This should be the same as the argument 
-#' supplied to \code{revamp.ensemble.lite.sampler}
+#' supplied to \code{calibVA.ensemble.lite.sampler}
 #' @param causes is a character vector with the names of the causes you are interested in.
-#' This should be the same as the argument supplied to \code{revamp.ensemble.lite.sampler}
+#' This should be the same as the argument supplied to \code{calibVA.ensemble.lite.sampler}
 #' @param burnin an integer specifying the number of draws you wish to discard
 #' before collecting draws. Default is 1,000
 #' @param thin an integer specifying the amount the draws should be thinned by
@@ -692,7 +692,7 @@ revampEnsembleIndPredictions <- function(revamp.samples, test.cod.mat, causes, b
 #' probability of individual i dying from cause j
 #' 
 #' @export
-revampEnsembleLiteIndPredictions <- function(revamp.samples, test.cod.mat, causes, burnin = 1E3, thin = 5) {
+calibVAEnsembleLiteIndPredictions <- function(calibVA.samples, test.cod.mat, causes, burnin = 1E3, thin = 5) {
   K <- ncol(test.cod.mat)
   C <- length(causes)
   j.mat <- expand.grid(lapply(1:K, function(k) causes), stringsAsFactors = FALSE)
@@ -703,11 +703,11 @@ revampEnsembleLiteIndPredictions <- function(revamp.samples, test.cod.mat, cause
 
   ### calculating U's
   print("calculating U's")
-  l=seq(burnin, length(revamp.samples), by = thin)
+  l=seq(burnin, length(calibVA.samples), by = thin)
   U.array=array(0,c(nrow(j.mat),C,length(l)))
   for(i in 1:length(l)) {
     draw <- l[i]
-    U.array[,,i] <- create.U(revamp.samples[[draw]]$M.array, j.mat, causes)
+    U.array[,,i] <- create.U(calibVA.samples[[draw]]$M.array, j.mat, causes)
     }
   print("Finished calculating U's")
   
@@ -715,7 +715,7 @@ revampEnsembleLiteIndPredictions <- function(revamp.samples, test.cod.mat, cause
     for(j in 1:ncol(prediction.mat)){
       post.samples <- sapply(1:length(l), function(r) {
         draw <- l[r]
-        x <- revamp.samples[[draw]]
+        x <- calibVA.samples[[draw]]
         U <- U.array[,,r]
         ### Index rows of U by j, columns by cause (i)
         p <- x$p
@@ -739,9 +739,9 @@ revampEnsembleLiteIndPredictions <- function(revamp.samples, test.cod.mat, cause
   return(list(topCOD = topCOD, ind.probabilities = ind.predictions))
 }
 
-#' @title Performs a MLE estimation for the likelihood portion of the ReVAMP model
+#' @title Performs a MLE estimation for the likelihood portion of the CalibVA model
 #' @description Uses the \link[Rsolnp]{solnp} function to obtain MLE estimates
-#' of p and M, based on the likelihood portion of the ReVAMP model
+#' of p and M, based on the likelihood portion of the CalibVA model
 #' 
 #' @param test.cod will be a vector of length N, with each entry as the estimated
 #' COD (as a character)for indiv. i 
@@ -798,106 +798,106 @@ mle.calibration <- function(test.cod, calib.cod, calib.truth, causes) {
   return(list(p = p.final, M = M.final))
 }
 
-##########################
-#' @title Wrapper function for implementing and the ReVAMP calibration
-#' @description \code{revamp_with_va} trains a VA method (currently one of
-#' Tariff, InterVA, or InSilicoVA) on training data (defaults to PHMRC data),
-#' and then uses the calibration and test data to implement the ReVAMP 
-#' hierarchical Bayesian model. This will perform the steps shown in the 
-#' package vignette in one function call
-#' 
-#' @param train.data A data frame/matrix which is compatible for training the given VA method. 
-#' Should have COD labels and be of moderate size
-#' @param calibration.data A data frame/matrix in the same format as \code{train.data}.
-#' @param test.data A data frame/matrix in the same format as \code{train.data}
-#' and \code{calibration.data}, except without COD labels.
-#' @param train.method A character string specifying the VA training method. As of now,
-#' we support "Tariff", "InSilicoVA", and "InterVA". 
-#' @param epsilon A numeric value for the epsilon in the prior
-#' @param alpha A numeric value for the alpha in the prior
-#' @param beta A numeric value for the beta in the prior
-#' @param tau.vec A numeric vector for the logsd for the sampling distributions
-#' of the gammas
-#' @param delta A numeric value for the delta in the prior
-#' @param gamma.init A numeric value for the starting value of gammas
-#' @param ndraws The number of posterior samples to take
-#' @param max.gamma The maximum value gamma is allowed to take in
-#' posterior samples. Default is 75.
-#' @param nchains The number of chains for which the ReVAMP sampling method will be run
-#' @param train.seeds An optional numeric value containing the seed which should be set
-#' before implementing the given training method
-#' @param sampler.seeds An optional vector of numeric values containing the seeds that should be 
-#' set for each chain of the Gibbs sampler. If given, should be of same length as
-#' the value of \code{nchains}
-#' @param ... Additional parameters for the given training method
-#'
-#' @return 
-#' \item{causes }{ The order of the causes in the output of the Gibbs sampler}
-#' \item{v }{ The C x 1 matrix used by the ReVAMP sampler}
-#' \item{T.mat }{ The C x C calibration matrix used by the ReVAMP sampler}
-#' \item{posterior.results}{ A list of length \code{nchains}, which each element
-#' of the list itself being a list containing the output for the ReVAMP sampler
-#' for that chain} \item{train.seed }{ The seed set before implementing the given training method}
-#' \item{sampler.seeds }{ The seeds set before running each chain of the ReVAMP sampler}
-#' @seealso \code{\link{revamp.sampler}}
-#' 
-#' @import openVA
-#' 
-revamp_with_va <- function(train.data, calibration.data, test.data, train.method,
-                           epsilon, alpha, beta, tau.vec, delta,
-                           gamma.init, ndraws, max.gamma = 75, nchains = 1, train.seed = NULL,
-                           sampler.seeds = NULL, ...)  {
-  if(length(train.method) != 1) {
-    stop("train.method should be a character vector of length 1")
-  }
-  if(!(train.method %in% c('Tariff', 'InSilicoVA', 'InterVA'))) {
-    stop("train.method must be one of Tariff, InSilicoVA, or InterVA")
-  }
-  if(is.null(train.seed)){
-    train.seed <- sample(1:1e6, 1, replace = F)
-  }
-  set.seed(train.seed)
-  VA.fit <- openVA::codeVA(data = rbind(calibration.data, test.data),
-                           data.type = "customize", model = train.method,
-                           data.train = train.data, ...)
-  if(train.method == "Tariff") {
-    all.predictions <- VA.fit$causes.test[,2]
-  } else if (train.method == "InSilicoVA"){
-    prediction.mat <- VA.fit$indiv.prob
-    all.predictions <- colnames(prediction.mat)[apply(prediction.mat, 1, which.max)]
-  } else {
-    all.predictions <- sapply(VA.fit$VA, function(x) {
-      wholeprob <- x$wholeprob
-      return(names(wholeprob)[which.max(wholeprob)])
-    })
-  }
-  
-  allcauses <- sort(unique(c(calibration.data$Cause, train.data$Cause)))
-  ncauses <- length(allcauses)
-  calibration.predictions <- all.predictions[1:nrow(calibration.data)]
-  
-  v <- sapply(allcauses, function(c) sum(all.predictions == c))
-  names(v) <- allcauses
-  
-  T.mat <- matrix(NA, nrow = ncauses, ncol = ncauses)
-  calib.truecod <- calibration.data$Cause
-  for(i in 1:ncauses){
-    for(j in 1:ncauses){
-      T.mat[i,j] <- sum(calib.truecod == allcauses[i] & calibration.predictions == allcauses[j])
-    }
-  }
-  colnames(T.mat) <- rownames(T.mat) <- allcauses
-  if(is.null(sampler.seeds)) {
-    sampler.seeds <- sample(1:1e6, nchains, replace = F)
-  }
-  posterior.list <- lapply(1:nchains, function(i) {
-    set.seed(sampler.seeds[i])
-    posterior <- revamp.sampler(v = v, T.mat = T.mat, epsilon = epsilon,
-                                alpha=alpha, beta=beta, tau.vec=tau.vec, delta=delta,
-                                gamma.init=gamma.init, ndraws = ndraws)
-    return(posterior)
-  })
-  names(posterior.list) <- paste0("chain", 1:nchains)
-  return(list(causes = allcauses, v = v, T.mat = T.mat, posterior.results = posterior.list,
-              train.seed = train.seed, sampler.seeds = sampler.seeds))
-}
+#' ##########################
+#' #' @title Wrapper function for implementing and the CalibVA calibration
+#' #' @description \code{calibVA_with_va} trains a VA method (currently one of
+#' #' Tariff, InterVA, or InSilicoVA) on training data (defaults to PHMRC data),
+#' #' and then uses the calibration and test data to implement the CalibVA 
+#' #' hierarchical Bayesian model. This will perform the steps shown in the 
+#' #' package vignette in one function call
+#' #' 
+#' #' @param train.data A data frame/matrix which is compatible for training the given VA method. 
+#' #' Should have COD labels and be of moderate size
+#' #' @param calibration.data A data frame/matrix in the same format as \code{train.data}.
+#' #' @param test.data A data frame/matrix in the same format as \code{train.data}
+#' #' and \code{calibration.data}, except without COD labels.
+#' #' @param train.method A character string specifying the VA training method. As of now,
+#' #' we support "Tariff", "InSilicoVA", and "InterVA". 
+#' #' @param epsilon A numeric value for the epsilon in the prior
+#' #' @param alpha A numeric value for the alpha in the prior
+#' #' @param beta A numeric value for the beta in the prior
+#' #' @param tau.vec A numeric vector for the logsd for the sampling distributions
+#' #' of the gammas
+#' #' @param delta A numeric value for the delta in the prior
+#' #' @param gamma.init A numeric value for the starting value of gammas
+#' #' @param ndraws The number of posterior samples to take
+#' #' @param max.gamma The maximum value gamma is allowed to take in
+#' #' posterior samples. Default is 75.
+#' #' @param nchains The number of chains for which the CalibVA sampling method will be run
+#' #' @param train.seeds An optional numeric value containing the seed which should be set
+#' #' before implementing the given training method
+#' #' @param sampler.seeds An optional vector of numeric values containing the seeds that should be 
+#' #' set for each chain of the Gibbs sampler. If given, should be of same length as
+#' #' the value of \code{nchains}
+#' #' @param ... Additional parameters for the given training method
+#' #'
+#' #' @return 
+#' #' \item{causes }{ The order of the causes in the output of the Gibbs sampler}
+#' #' \item{v }{ The C x 1 matrix used by the CalibVA sampler}
+#' #' \item{T.mat }{ The C x C calibration matrix used by the CalibVA sampler}
+#' #' \item{posterior.results}{ A list of length \code{nchains}, which each element
+#' #' of the list itself being a list containing the output for the CalibVA sampler
+#' #' for that chain} \item{train.seed }{ The seed set before implementing the given training method}
+#' #' \item{sampler.seeds }{ The seeds set before running each chain of the CalibVA sampler}
+#' #' @seealso \code{\link{calibva.sampler}}
+#' #' 
+#' #' @import openVA
+#' #' 
+#' revamp_with_va <- function(train.data, calibration.data, test.data, train.method,
+#'                            epsilon, alpha, beta, tau.vec, delta,
+#'                            gamma.init, ndraws, max.gamma = 75, nchains = 1, train.seed = NULL,
+#'                            sampler.seeds = NULL, ...)  {
+#'   if(length(train.method) != 1) {
+#'     stop("train.method should be a character vector of length 1")
+#'   }
+#'   if(!(train.method %in% c('Tariff', 'InSilicoVA', 'InterVA'))) {
+#'     stop("train.method must be one of Tariff, InSilicoVA, or InterVA")
+#'   }
+#'   if(is.null(train.seed)){
+#'     train.seed <- sample(1:1e6, 1, replace = F)
+#'   }
+#'   set.seed(train.seed)
+#'   VA.fit <- openVA::codeVA(data = rbind(calibration.data, test.data),
+#'                            data.type = "customize", model = train.method,
+#'                            data.train = train.data, ...)
+#'   if(train.method == "Tariff") {
+#'     all.predictions <- VA.fit$causes.test[,2]
+#'   } else if (train.method == "InSilicoVA"){
+#'     prediction.mat <- VA.fit$indiv.prob
+#'     all.predictions <- colnames(prediction.mat)[apply(prediction.mat, 1, which.max)]
+#'   } else {
+#'     all.predictions <- sapply(VA.fit$VA, function(x) {
+#'       wholeprob <- x$wholeprob
+#'       return(names(wholeprob)[which.max(wholeprob)])
+#'     })
+#'   }
+#'   
+#'   allcauses <- sort(unique(c(calibration.data$Cause, train.data$Cause)))
+#'   ncauses <- length(allcauses)
+#'   calibration.predictions <- all.predictions[1:nrow(calibration.data)]
+#'   
+#'   v <- sapply(allcauses, function(c) sum(all.predictions == c))
+#'   names(v) <- allcauses
+#'   
+#'   T.mat <- matrix(NA, nrow = ncauses, ncol = ncauses)
+#'   calib.truecod <- calibration.data$Cause
+#'   for(i in 1:ncauses){
+#'     for(j in 1:ncauses){
+#'       T.mat[i,j] <- sum(calib.truecod == allcauses[i] & calibration.predictions == allcauses[j])
+#'     }
+#'   }
+#'   colnames(T.mat) <- rownames(T.mat) <- allcauses
+#'   if(is.null(sampler.seeds)) {
+#'     sampler.seeds <- sample(1:1e6, nchains, replace = F)
+#'   }
+#'   posterior.list <- lapply(1:nchains, function(i) {
+#'     set.seed(sampler.seeds[i])
+#'     posterior <- revamp.sampler(v = v, T.mat = T.mat, epsilon = epsilon,
+#'                                 alpha=alpha, beta=beta, tau.vec=tau.vec, delta=delta,
+#'                                 gamma.init=gamma.init, ndraws = ndraws)
+#'     return(posterior)
+#'   })
+#'   names(posterior.list) <- paste0("chain", 1:nchains)
+#'   return(list(causes = allcauses, v = v, T.mat = T.mat, posterior.results = posterior.list,
+#'               train.seed = train.seed, sampler.seeds = sampler.seeds))
+#' }

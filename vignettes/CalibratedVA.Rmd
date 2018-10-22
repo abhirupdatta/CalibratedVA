@@ -1,5 +1,5 @@
 ---
-title: "ReVAMP"
+title: "CalibratedVA"
 author: "Jacob Fiksel and Abhirup Datta"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
@@ -21,22 +21,39 @@ knitr::opts_chunk$set(
 
 ## Introduction
 
-In many countries, it is infeasible to conduct full autopsies for the majority of deaths due to economic and infrastructural limitations, and/or religious or cultural prohibitions against autopsies [@abouzahr2015civil; @allotey2015let]. An alternative method to infer the cause (or "etiology") of death (COD) is to conduct *verbal autopsy* (VA) --  a systematic interview of the relatives of the deceased individual to obtain information about symptoms observed prior to death [@soleman2006verbal]. The reported symptoms in the VA can then be assessed by a group of physicians who assign the likely cause(s) of death.
+Many countries cannot conduct full autopsies for the majority of deaths due to either cultural or economic limitations [@abouzahr2015civil; @allotey2015let]. Rather than perform an invasive autopsy, an alternative method to determine the cause (or "etiology") of death (COD) is to conduct a *verbal autopsy* (VA), where relatives of the deceased individual are asked a set list of questions to obtain information about symptoms experienced by the deceased observed prior to death [@soleman2006verbal]. Medical experts can then
+use these VA responses to determine the COD for an individual.
 
-While *physician coded* VA is a useful alternative to full autopsies, scaling the process to the regional or national level is challenging. Consequently, over the last decade several data-driven solutions have been proposed that replace the physician coding with artificial intelligence software. These *computer coded* VA (CCVA) algorithms predict COD using the VA records as input. Examples include Tariff [@tariff; @tariff2], interVA [@interva], and InsilicoVA [@insilico]. To create the prediction algorithm, all of these approaches require a substantial training dataset, where both the VA reports and the true gold standard cause of deaths, either the full autopsies or the physicians' opinions are available.
+If we are interested in obtaining causes of death for a large amount of individuals in a
+region or country, in order to determine optimal resource allocation, we need an efficient
+way to scale the process of determining the COD from VA data. Several algorithms have
+recently been proposed to automatically predict COD from VA records. These *computer coded* VA (CCVA) algorithms predict COD using the VA records as input. Examples include Tariff [@tariff; @tariff2], interVA [@interva], and InsilicoVA [@insilico]. These algorithms all require datasets with both VA symptom data and
+a gold standard (GS) COD determined for each individual.
 
-The ReVAMP (Regularized Verbal Autopsy based Mortality Prediction) package is to be used
-when a limited amount of gold standard (GS) cause of death data is available for a new country. 
-ReVAMP implements a general calibration framework for obtaining population CSMF estimates in a new country using countrywide VA records and a limited amount of local GS data with the true COD. Our calibration approach is to first use one or more CCVA algorithms trained on non-local GS information, then use limited local GS data to update the initial CSMF to arrive at an improved final estimate.
+
+If we are interested in obtaining population cause specific mortality fraction (CSMF), we can 
+train one of the above algorithms with GS COD data from our country of interest,
+obtain individual predictions from VA data for our
+country of interest, and then aggregate the predictions to the CSMF level. However,
+there may be limited amounts of GS COD data for a new country. In addition,
+algorithms trained on GS COD from other countries may not be as accurate.
+
+
+The CalibratedVA package is to be used for exactly the situation above--
+we take predictions from one or multiple algorithm(s) trained on a large 
+non-local dataset, and use the local GS COD dataset to improve the
+CSMF estimates.
 
 ## PHMRC Data
 
-The Population Health Metrics Research Consortium (PHMRC) study, conducted in 4 countries across six sites, is a benchmark database of paired VA records and GS-COD of children, neonates and adults. PHMRC data is frequently used to assess performance of CCVA algorithms. In this vignette, we will use the `openVA` package to obtain PHMRC data and implement the Tariff and InSilicoVA algorithms. We will of course also have to load the `ReVAMP` package.
+The Population Health Metrics Research Consortium (PHMRC) study contains GS COD data
+for children, neonates and adults in 4 countries, making it a perfect dataset
+to demonstrate the merits of `CalibratedVA`. In this vignette, we will use the `openVA` package to obtain PHMRC data and implement the Tariff and InSilicoVA algorithms. We will of course also have to load the `CalibratedVA` package.
 
 
 ```{r load_pkgs}
 library(openVA)
-library(ReVAMP)
+library(CalibratedVA)
 ```
 
 We will now load in the PHMRC child data and use the `ConvertData.phmrc` function
@@ -47,7 +64,7 @@ child.raw <- read.csv(getPHMRC_url("child"))
 child.clean <- ConvertData.phmrc(child.raw, phmrc.type = "child")$output
 ```
 
-To demonstrate how to implement ReVAMP, we will first treat Tanzania as our country of interest
+To demonstrate how to implement CalibratedVA, we will first treat Tanzania as our country of interest
 for obtaining accurate CSMF estimates. We will split the PHMRC data from Tanzania into a hospital (calibration) and population (test) set, and use the rest of the PHMRC data as our gold standard (training) set. We will use a calibration set size of 100.
 
 ```{r split_data}
@@ -66,7 +83,7 @@ In this section, we will use our training data to build prediction models using
 the Tariff and InSilicoVA algorithms. First we will implement Tariff. 
 Note that the `data` argument is the data for which we want to obtain COD
 predictions for, which is both the calibration data and our test data (we 
-will use the calibration set for ReVAMP later in the vignette). When evaluating
+will use the calibration set for CalibratedVA later in the vignette). When evaluating
 the performance of these algorithms, we will only do so on the predictions
 for the test data.
 
@@ -88,7 +105,7 @@ insilico.train <- codeVA(data = rbind(calibration.data, test.data),
 ```
 
 
-## Implementing ReVAMP with Individual Algorithms
+## Implementing CalibratedVA with Individual Algorithms
 
 For simplicity, we will restrict ourselves to predicting the distribution for the
 top 3 COD (from Tanzania), and treat all other COD as "other". Because "Other Defined Causes of Child Deaths" is
@@ -122,10 +139,10 @@ insilico.train.cod.test <- insilico.train.cod[-(1:100)]
 insilico.train.cod.calib <- insilico.train.cod[1:100]
 ```
 
-We will now initiate hyper-parameter values for ReVAMP. These can be changed of course,
+We will now initiate hyper-parameter values for CalibratedVA. These can be changed of course,
 but we have found these values work well. We will run 3  chains, obtaining 50,000 draws
 for each chains. Note that the order of the causes in the `causes` vector, 
-as this is the order in which ReVAMP will present the distribution of
+as this is the order in which CalibratedVA will present the distribution of
 COD estimates.
 
 ```{r hyperparams}
@@ -141,14 +158,14 @@ ndraws <- 50E3
 nchains <- 3
 ```
 
-We will first run ReVAMP using the Tariff predictions.
+We will first run CalibratedVA using the Tariff predictions.
 
-```{r tariff_revamp}
+```{r tariff_calibva, cache = TRUE}
 set.seed(123)
-revamp.seeds <- sample(1e6, nchains, replace = F)
-tariff.revamp <- lapply(1:nchains, function(i) {
-    set.seed(revamp.seeds[i])
-    revamp.sampler(test.cod = tariff.train.cod.test, calib.cod = tariff.train.cod.calib,
+calibva.seeds <- sample(1e6, nchains, replace = F)
+tariff.calibva <- lapply(1:nchains, function(i) {
+    set.seed(calibva.seeds[i])
+    calibva.sampler(test.cod = tariff.train.cod.test, calib.cod = tariff.train.cod.calib,
                    calib.truth = calibration.changedcod, causes = causes,
                    epsilon = epsilon, alpha=alpha, beta=beta,
                    tau.vec=tau.vec, delta=delta,
@@ -158,12 +175,12 @@ tariff.revamp <- lapply(1:nchains, function(i) {
 
 And now using the InSilicoVA predictions.
 
-```{r insilico_revamp}
+```{r insilico_calibva, cache = TRUE}
 set.seed(123)
-revamp.seeds <- sample(1e6, nchains, replace = F)
-insilico.revamp <- lapply(1:nchains, function(i) {
-    set.seed(revamp.seeds[i])
-    revamp.sampler(test.cod = insilico.train.cod.test, calib.cod = insilico.train.cod.calib,
+calibva.seeds <- sample(1e6, nchains, replace = F)
+insilico.calibva <- lapply(1:nchains, function(i) {
+    set.seed(calibva.seeds[i])
+    calibva.sampler(test.cod = insilico.train.cod.test, calib.cod = insilico.train.cod.calib,
                    calib.truth = calibration.changedcod, causes = causes,
                    epsilon = epsilon, alpha=alpha, beta=beta,
                    tau.vec=tau.vec, delta=delta,
@@ -171,18 +188,18 @@ insilico.revamp <- lapply(1:nchains, function(i) {
 })
 ```
 
-## Implementing Ensemble ReVAMP
+## Implementing Ensemble CalibratedVA
 
-The previous section clearly reveals that REVAMP can use the output from any CCVA algorithm. Several CCVA algorithms have been implemented in publicly available software; in any particular analysis, the optimal CCVA is unknown. For example, in the above implentation, if our population (test) set had not already been labeled with the GS COD, we would not know whether it would be best to implement ReVAMP with Tariff or InSilicoVA. In the code below, we show how to implement the Independent ReVAMP Ensemble Model, which uses the predictions from multiple VA-based algorithms. We use output from the Tariff and InSilicoVA models built in the previous section.
+The previous section clearly reveals that REVAMP can use the output from any CCVA algorithm. Several CCVA algorithms have been implemented in publicly available software; in any particular analysis, the optimal CCVA is unknown. For example, in the above implentation, if our population (test) set had not already been labeled with the GS COD, we would not know whether it would be best to implement CalibratedVA with Tariff or InSilicoVA. In the code below, we show how to implement the Independent CalibratedVA Ensemble Model, which uses the predictions from multiple VA-based algorithms. We use output from the Tariff and InSilicoVA models built in the previous section.
 
-```{r revamp_ensemble}
+```{r calibva_ensemble, cache = TRUE}
 set.seed(123)
-revamp.seeds <- sample(1e6, nchains, replace = F)
+calibva.seeds <- sample(1e6, nchains, replace = F)
 test.cod.mat <- matrix(c(tariff.train.cod.test,  insilico.train.cod.test), ncol = 2)
 calib.cod.mat <- matrix(c(tariff.train.cod.calib,  insilico.train.cod.calib), ncol = 2)
-ensemble.revamp <- lapply(1:nchains, function(i) {
-    set.seed(revamp.seeds[i])
-    revamp.ensemble.lite.sampler(test.cod.mat = test.cod.mat, calib.cod.mat = calib.cod.mat,
+ensemble.calibva <- lapply(1:nchains, function(i) {
+    set.seed(calibva.seeds[i])
+    calibva.ensemble.lite.sampler(test.cod.mat = test.cod.mat, calib.cod.mat = calib.cod.mat,
                                  calib.truth = calibration.changedcod, causes = causes,
                                  epsilon = epsilon, alpha=alpha, beta=beta,
                                  tau.vec=tau.vec, delta=delta,
@@ -190,42 +207,42 @@ ensemble.revamp <- lapply(1:nchains, function(i) {
 })
 ```
 
-## Obtaining ReVAMP output
+## Obtaining CalibratedVA output
 
-The `revamp.sampler` (or `revamp.ensemble.lite.sampler`) output is a list of length `ndraws`. Each element in this list is itself a list, with each element containing a posterior draw for each parameter. We can inspect what this looks like, from our first chain of the ReVAMP with Tariff sampler.
+The `calibva.sampler` (or `calibva.ensemble.lite.sampler`) output is a list of length `ndraws`. Each element in this list is itself a list, with each element containing a posterior draw for each parameter. We can inspect what this looks like, from our first chain of the CalibratedVA with Tariff sampler.
 
 ```{r inspect_posterior}
-tariff.revamp[[1]][[5000]]
+tariff.calibva[[1]][[5000]]
 ```
 
 The most important parameters are the $p_{i}$, which is the true CSMF for COD $i$.
 The $i$th element in $p_{i}$ refers to the $i$th element in the `causes` input
-of `revamp.sampler`.
+of `calibva.sampler`.
 
-We can extract these parameter estimates using the `revampCSMF` function and then plot the posterior densities versus the true CSMF in the test set. We will use a burn-in of 10,000 and thin the draws by 10.
+We can extract these parameter estimates using the `calibvaCSMF` function and then plot the posterior densities versus the true CSMF in the test set. We will use a burn-in of 10,000 and thin the draws by 10.
 
 ```{r extract_csmf}
 burnin <- 10E3
 thin <- 10
 
-tariff.revamp.csmf.list <- lapply(1:nchains, function(i) {
-    revampCSMF(tariff.revamp[[i]], burnin = burnin, thin = thin)
+tariff.calibva.csmf.list <- lapply(1:nchains, function(i) {
+    calibvaCSMF(tariff.calibva[[i]], burnin = burnin, thin = thin)
 })
-tariff.revamp.csmf.df <- do.call(rbind, tariff.revamp.csmf.list)
+tariff.calibva.csmf.df <- do.call(rbind, tariff.calibva.csmf.list)
 
-insilico.revamp.csmf.list <- lapply(1:nchains, function(i) {
-    revampCSMF(insilico.revamp[[i]], burnin = burnin, thin = thin)
+insilico.calibva.csmf.list <- lapply(1:nchains, function(i) {
+    calibvaCSMF(insilico.calibva[[i]], burnin = burnin, thin = thin)
 })
-insilico.revamp.csmf.df <- do.call(rbind, insilico.revamp.csmf.list)
+insilico.calibva.csmf.df <- do.call(rbind, insilico.calibva.csmf.list)
 
-ensemble.revamp.csmf.list <- lapply(1:nchains, function(i) {
-    revampCSMF(ensemble.revamp[[i]], burnin = burnin, thin = thin)
+ensemble.calibva.csmf.list <- lapply(1:nchains, function(i) {
+    calibvaCSMF(ensemble.calibva[[i]], burnin = burnin, thin = thin)
 })
-ensemble.revamp.csmf.df <- do.call(rbind, ensemble.revamp.csmf.list)
+ensemble.calibva.csmf.df <- do.call(rbind, ensemble.calibva.csmf.list)
 
 ```
 
-We can plot the posterior distribution of CSMF estimates from our ReVAMP with
+We can plot the posterior distribution of CSMF estimates from our CalibratedVA with
 Tariff sample. We will show the true CSMF in red, and the estimated CSMF
 from just Tariff in blue.
 
@@ -238,7 +255,7 @@ true.p <- data.frame(p = unname(as.vector(true.p)), cause = names(true.p))
 tariff.p <- prop.table(table(tariff.train.cod.test))
 tariff.p <- data.frame(p = unname(as.vector(tariff.p)), cause = names(tariff.p))
 ggplot() +
-    geom_density(data = tariff.revamp.csmf.df, aes(p)) +
+    geom_density(data = tariff.calibva.csmf.df, aes(p)) +
     geom_vline(data = true.p, aes(xintercept = p), colour = 'red') +
     geom_vline(data = tariff.p, aes(xintercept = p), colour = 'blue') +
     facet_wrap(~cause, scales = "free_y") +
@@ -257,13 +274,13 @@ where $CSMF_{i}$ and $CSMF_{i}^{(true)}$ are the estimated and true percentages,
 
 To obtain estimates of the CSMFs, we will use the marginal posterior means from the 
 posterior draws. We will first write functions to obtain the point predictions
-from ReVAMP, Tariff, and InSilicoVA.
+from CalibratedVA, Tariff, and InSilicoVA.
 
 ```{r csmf_functions}
-revampCSMFMeanEstimate <- function(revamp.csmf.df, causes) {
+calibvaCSMFMeanEstimate <- function(calibva.csmf.df, causes) {
     csmf.init <- sapply(causes, function(c) {
-        revamp.cause <- revamp.csmf.df[revamp.csmf.df$cause == c,]
-        return(mean(revamp.cause$p))
+        calibva.cause <- calibva.csmf.df[calibva.csmf.df$cause == c,]
+        return(mean(calibva.cause$p))
     })
     return(csmf.init)
 }
@@ -275,12 +292,12 @@ openVACSMF <- function(topcod, causes) {
 ```
 
 We will now obtain these CSMF estimates, using the causes defined in the code 
-block where we set the ReVAMP hyperparameter values.
+block where we set the CalibratedVA hyperparameter values.
 
 ```{r obtain_csmf}
-tariff.revamp.csmf <- revampCSMFMeanEstimate(tariff.revamp.csmf.df, causes)
-insilico.revamp.csmf <- revampCSMFMeanEstimate(insilico.revamp.csmf.df, causes)
-ensemble.revamp.csmf <- revampCSMFMeanEstimate(ensemble.revamp.csmf.df, causes)
+tariff.calibva.csmf <- calibvaCSMFMeanEstimate(tariff.calibva.csmf.df, causes)
+insilico.calibva.csmf <- calibvaCSMFMeanEstimate(insilico.calibva.csmf.df, causes)
+ensemble.calibva.csmf <- calibvaCSMFMeanEstimate(ensemble.calibva.csmf.df, causes)
 tariff.train.csmf <- openVACSMF(tariff.train.cod.test, causes)
 insilico.train.csmf <- openVACSMF(insilico.train.cod.test, causes)
 ```
@@ -288,25 +305,25 @@ insilico.train.csmf <- openVACSMF(insilico.train.cod.test, causes)
 Finally, we will obtain and display the CSMF accuracy for these 5 methods.
 
 ```{r csmf_accuracy}
-methods <- c("tariff_revamp",
-             "insilico_revamp",
-             "ensemble_revamp",
+methods <- c("tariff_calibva",
+             "insilico_calibva",
+             "ensemble_calibva",
              "tariff_train",
              "insilico_train")
 ptrue <- sapply(causes, function(c) mean(change.cause(tanzania.data$Cause) == c))
-csmf.acc.df <- data.frame(csmf.acc = c(getCSMF_accuracy(tariff.revamp.csmf, ptrue),
-                                       getCSMF_accuracy(insilico.revamp.csmf, ptrue),
-                                       getCSMF_accuracy(ensemble.revamp.csmf, ptrue),
+csmf.acc.df <- data.frame(csmf.acc = c(getCSMF_accuracy(tariff.calibva.csmf, ptrue),
+                                       getCSMF_accuracy(insilico.calibva.csmf, ptrue),
+                                       getCSMF_accuracy(ensemble.calibva.csmf, ptrue),
                                        getCSMF_accuracy(tariff.train.csmf, ptrue),
                                        getCSMF_accuracy(insilico.train.csmf, ptrue)),
                           method = methods)
 csmf.acc.df
 ```
 
-We see two interesting observations. First, all three ReVAMP methods
+We see two interesting observations. First, all three CalibratedVA methods
 substantially outperform Tariff and InSilicoVA in terms of CSMF accuracy. Second,
-The CSMF accuracy of the ensemble method of ReVAMP falls right in the middle of 
-the CSMF accuracies of Tariff and ReVAMP. This indicates that it is a useful method
+The CSMF accuracy of the ensemble method of CalibratedVA falls right in the middle of 
+the CSMF accuracies of Tariff and CalibratedVA. This indicates that it is a useful method
 to use, as it is always unknown whether Tariff or InSilicoVA will be the best performing algorithm.
 
 ## References

@@ -2,7 +2,7 @@
 % Please edit documentation in R/calibration.R
 \name{mle.calibration}
 \alias{mle.calibration}
-\title{Performs a MLE estimation for the likelihood portion of the ReVAMP model}
+\title{Performs a MLE estimation for the likelihood portion of the CalibVA model}
 \usage{
 mle.calibration(test.cod, calib.cod, calib.truth, causes)
 }
@@ -25,5 +25,5 @@ estimates of the M matrix described in the method
 }
 \description{
 Uses the \link[Rsolnp]{solnp} function to obtain MLE estimates
-of p and M, based on the likelihood portion of the ReVAMP model
+of p and M, based on the likelihood portion of the CalibVA model
 }
