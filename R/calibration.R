@@ -250,7 +250,8 @@ sample.gamma2 <- function(gamma.vec, epsilon, alpha, beta, M, tau.vec, max.gamma
 #' @export
 calibva.sampler <- function(test.cod, calib.cod, calib.truth, causes,
                            epsilon, alpha, beta, tau.vec, delta,
-                           gamma.init, ndraws, max.gamma = 75) {
+                           gamma.init, ndraws, max.gamma = 75, sample.gamma = TRUE,
+                           gamma.final = NULL) {
   v <- sapply(causes, function(c) sum(test.cod == c))
   C <- length(causes)
   T.mat <- matrix(NA, nrow = C, ncol = C)
@@ -270,19 +271,34 @@ calibva.sampler <- function(test.cod, calib.cod, calib.truth, causes,
   
   names(post.samples[[1]]$p) <- causes
   post.samples[[1]]$B <- sample.B(post.samples[[1]]$M, post.samples[[1]]$p, v)
-  post.samples[[1]]$gamma <- sample.gamma2(rep(gamma.init, nrow(T.mat)), epsilon,
-                                           alpha, beta, post.samples[[1]]$M, tau.vec,
-                                           max.gamma)
+  if(sample.gamma == FALSE) {
+      if(is.null(gamma.final)) {
+          stop("Please provide a fixed value of gamma")
+      } else {
+          post.samples[[1]]$gamma <- gamma.final
+      }
+      
+  } else {
+      post.samples[[1]]$gamma <- sample.gamma2(rep(gamma.init, nrow(T.mat)), epsilon,
+                                               alpha, beta, post.samples[[1]]$M,
+                                               tau.vec, max.gamma)  
+  }
+  
   for(i in 2:ndraws){
     post.samples[[i]]$M <- sample.M2(post.samples[[i-1]]$B, post.samples[[i-1]]$gamma,
                                      epsilon, T.mat)
     post.samples[[i]]$p <- sample.p(post.samples[[i-1]]$B, delta)
     names(post.samples[[i]]$p) <- causes
     post.samples[[i]]$B <- sample.B(post.samples[[i]]$M, post.samples[[i]]$p, v)
-    post.samples[[i]]$gamma <- sample.gamma2(post.samples[[i-1]]$gamma,
-                                             epsilon, alpha, beta,
-                                             post.samples[[i]]$M, tau.vec,
-                                             max.gamma)
+    if(sample.gamma == FALSE) {
+        post.samples[[i]]$gamma <- gamma.final
+    } else {
+        post.samples[[i]]$gamma <- sample.gamma2(post.samples[[i-1]]$gamma,
+                                                 epsilon, alpha, beta,
+                                                 post.samples[[i]]$M, tau.vec,
+                                                 max.gamma)
+    }
+    
     #post.samples[[i]]$gamma <- gamma.init
     #if((i%%1000)==0) print(paste("Run", i, post.samples[[i]]$gamma))
     if((i%%10000)==0) print(paste("Draw", i))
