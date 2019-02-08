@@ -242,34 +242,34 @@ sample.gamma2 <- function(gamma.vec, epsilon, alpha, beta, M, tau.vec, max.gamma
 #' @param max.gamma The maximum value gamma is allowed to take in
 #' posterior samples. Default is 75.
 #'
-#' @return A list of length \code{ndraws} where each entry in the list contains
+#' @return A \code{mcmc} object  \code{ndraws} where each entry in the list contains
 #' the posterior draw for each parameter
 #'
 #' @import MCMCpack
 #'
 #' @export
-calibva.sampler <- function(test.cod, calib.cod, calib.truth, causes,
+calibva.sampler <- function(test.cod, calib.cod = NA, calib.truth = NA, causes,
                            epsilon, alpha, beta, tau.vec, delta,
-                           gamma.init, ndraws, max.gamma = 75, sample.gamma = TRUE,
+                           gamma.init, ndraws, init.seeds = NULL, max.gamma = 75, sample.gamma = TRUE,
                            gamma.final = NULL) {
   v <- sapply(causes, function(c) sum(test.cod == c))
   C <- length(causes)
   T.mat <- matrix(NA, nrow = C, ncol = C)
+  
   for(i in 1:C){
     for(j in 1:C){
-      T.mat[i,j] <- sum(calib.truth == causes[i] & calib.cod == causes[j])
+      if(!is.na(calib.cod) & !is.na(calib.truth)){
+        T.mat[i,j] <- sum(calib.truth == causes[i] & calib.cod == causes[j])
+      } else {
+        T.mat[i,j] <- 0
+      }
     }
   }
   post.samples <- vector("list", ndraws)
   post.samples[[1]]$M <- initialize.M(T.mat)
-  # for(i in 1:nrow(post.samples[[1]]$M)){
-  #     if(sum(T.mat[i,]) > 0){
-  #         post.samples[[1]]$M[i,] <- T.mat[i,] / sum(T.mat[i,])
-  #     }
-  # }
   post.samples[[1]]$p <- initialize.p(v)
   
-  names(post.samples[[1]]$p) <- causes
+ # names(post.samples[[1]]$p) <- causes
   post.samples[[1]]$B <- sample.B(post.samples[[1]]$M, post.samples[[1]]$p, v)
   if(sample.gamma == FALSE) {
       if(is.null(gamma.final)) {
@@ -288,7 +288,7 @@ calibva.sampler <- function(test.cod, calib.cod, calib.truth, causes,
     post.samples[[i]]$M <- sample.M2(post.samples[[i-1]]$B, post.samples[[i-1]]$gamma,
                                      epsilon, T.mat)
     post.samples[[i]]$p <- sample.p(post.samples[[i-1]]$B, delta)
-    names(post.samples[[i]]$p) <- causes
+   # names(post.samples[[i]]$p) <- causes
     post.samples[[i]]$B <- sample.B(post.samples[[i]]$M, post.samples[[i]]$p, v)
     if(sample.gamma == FALSE) {
         post.samples[[i]]$gamma <- gamma.final
@@ -301,9 +301,30 @@ calibva.sampler <- function(test.cod, calib.cod, calib.truth, causes,
     
     #post.samples[[i]]$gamma <- gamma.init
     #if((i%%1000)==0) print(paste("Run", i, post.samples[[i]]$gamma))
-    if((i%%10000)==0) print(paste("Draw", i))
+    if((i%%10000)==0) message(paste("Draw", i))
   }
-  return(post.samples)
+  ### Put everything into a matrix, to be converted into an mcmc object
+  ### Number of params is 2 * C ^ 2 (M matrix and B matrix) + 2 * p (gamma vector & p vector)
+  n.params <- 2 * C^2 + 2 * C
+  post.samples.mat <- matrix(nrow = length(post.samples), ncol = n.params)
+  for(i in 1:nrow(post.samples.mat)){
+    samp <- post.samples[[i]]
+    p.vec <- unname(samp$p)
+    M.vec <- as.vector(samp$M)
+    gamma.vec <- samp$gamma
+    B.vec <- as.vector(samp$B)
+    post.samples.mat[i,] <- c(p.vec, M.vec, gamma.vec, B.vec)
+  }
+  ### Column names is first cause names (with prefix p)
+  ### then M (as.vector goes by column)
+  cnames <- c(paste0("p[", 1:C, "]"),
+              paste0(paste0("M[", rep(1:C, C), ","), rep(1:C, each = C), "]"),
+              paste0("gamma[", 1:C, "]"),
+              paste0(paste0("B[", rep(1:C, C), ","), rep(1:C, each = C), "]"))
+  
+  colnames(post.samples.mat) <- cnames
+  return(mcmc(post.samples.mat))
+  #return(post.samples)
 }
 
 #' @title collect CSMF estimates from the CalibVA sampler
