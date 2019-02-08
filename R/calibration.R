@@ -238,19 +238,22 @@ sample.gamma2 <- function(gamma.vec, epsilon, alpha, beta, M, tau.vec, max.gamma
 #' of the gammas
 #' @param delta A numeric value for the delta in the prior
 #' @param gamma.init A numeric value for the starting value of gammas
-#' @param ndraws The number of posterior samples to take
+#' @param ndraws The number of posterior samples to take within each chain
+#' @param nchains The number of chains
+#' @param init.seeds An optional numeric vector, of length nchains, with the initial seeds for each chain
 #' @param max.gamma The maximum value gamma is allowed to take in
 #' posterior samples. Default is 75.
 #'
-#' @return A \code{mcmc} object  \code{ndraws} where each entry in the list contains
-#' the posterior draw for each parameter
+#' @return A \code{mcmc.list} object, with each element as \code{mcmc.object} containing
+#' a matrix with column for each parameter. Each of the \code{ndraws} rows contains the samples
+#' from the posterior draw for each parameter
 #'
 #' @import MCMCpack
 #'
 #' @export
-calibva.sampler <- function(test.cod, calib.cod = NA, calib.truth = NA, causes,
+calibva.sampler <- function(test.cod, calib.cod = NULL, calib.truth = NULL, causes,
                            epsilon, alpha, beta, tau.vec, delta,
-                           gamma.init, ndraws, init.seeds = NULL, max.gamma = 75, sample.gamma = TRUE,
+                           gamma.init, ndraws, nchains = 1, init.seeds = NULL, max.gamma = 75, sample.gamma = TRUE,
                            gamma.final = NULL) {
   v <- sapply(causes, function(c) sum(test.cod == c))
   C <- length(causes)
@@ -258,97 +261,86 @@ calibva.sampler <- function(test.cod, calib.cod = NA, calib.truth = NA, causes,
   
   for(i in 1:C){
     for(j in 1:C){
-      if(!is.na(calib.cod) & !is.na(calib.truth)){
+      if(!is.null(calib.cod) & !is.null(calib.truth)){
         T.mat[i,j] <- sum(calib.truth == causes[i] & calib.cod == causes[j])
       } else {
         T.mat[i,j] <- 0
       }
     }
   }
-  post.samples <- vector("list", ndraws)
-  post.samples[[1]]$M <- initialize.M(T.mat)
-  post.samples[[1]]$p <- initialize.p(v)
-  
- # names(post.samples[[1]]$p) <- causes
-  post.samples[[1]]$B <- sample.B(post.samples[[1]]$M, post.samples[[1]]$p, v)
-  if(sample.gamma == FALSE) {
+  if(is.null(init.seeds)){
+    set.seed(123)
+    init.seeds <- sample(-1e6:1e6, nchains, replace = F)
+  } else {
+    if(length(init.seeds) != nchains) {
+      stop("The init.seed vector needs to be of length nchains")
+    }
+  }
+  posterior.list <- lapply(seq_along(init.seeds), function(chain) {
+    seed <- init.seeds[chain]
+    set.seed(seed)
+    post.samples <- vector("list", ndraws)
+    post.samples[[1]]$M <- initialize.M(T.mat)
+    post.samples[[1]]$p <- initialize.p(v)
+    
+    # names(post.samples[[1]]$p) <- causes
+    post.samples[[1]]$B <- sample.B(post.samples[[1]]$M, post.samples[[1]]$p, v)
+    if(sample.gamma == FALSE) {
       if(is.null(gamma.final)) {
-          stop("Please provide a fixed value of gamma")
+        stop("Please provide a fixed value of gamma")
       } else {
-          post.samples[[1]]$gamma <- gamma.final
+        post.samples[[1]]$gamma <- gamma.final
       }
       
-  } else {
+    } else {
       post.samples[[1]]$gamma <- sample.gamma2(rep(gamma.init, nrow(T.mat)), epsilon,
                                                alpha, beta, post.samples[[1]]$M,
                                                tau.vec, max.gamma)  
-  }
-  
-  for(i in 2:ndraws){
-    post.samples[[i]]$M <- sample.M2(post.samples[[i-1]]$B, post.samples[[i-1]]$gamma,
-                                     epsilon, T.mat)
-    post.samples[[i]]$p <- sample.p(post.samples[[i-1]]$B, delta)
-   # names(post.samples[[i]]$p) <- causes
-    post.samples[[i]]$B <- sample.B(post.samples[[i]]$M, post.samples[[i]]$p, v)
-    if(sample.gamma == FALSE) {
+    }
+    
+    for(i in 2:ndraws){
+      post.samples[[i]]$M <- sample.M2(post.samples[[i-1]]$B, post.samples[[i-1]]$gamma,
+                                       epsilon, T.mat)
+      post.samples[[i]]$p <- sample.p(post.samples[[i-1]]$B, delta)
+      # names(post.samples[[i]]$p) <- causes
+      post.samples[[i]]$B <- sample.B(post.samples[[i]]$M, post.samples[[i]]$p, v)
+      if(sample.gamma == FALSE) {
         post.samples[[i]]$gamma <- gamma.final
-    } else {
+      } else {
         post.samples[[i]]$gamma <- sample.gamma2(post.samples[[i-1]]$gamma,
                                                  epsilon, alpha, beta,
                                                  post.samples[[i]]$M, tau.vec,
                                                  max.gamma)
+      }
+      
+      #post.samples[[i]]$gamma <- gamma.init
+      #if((i%%1000)==0) print(paste("Run", i, post.samples[[i]]$gamma))
+      if((i%%10000)==0) message(paste("Chain", chain, "Draw", i))
     }
+    ### Put everything into a matrix, to be converted into an mcmc object
+    ### Number of params is 2 * C ^ 2 (M matrix and B matrix) + 2 * p (gamma vector & p vector)
+    n.params <- 2 * C^2 + 2 * C
+    post.samples.mat <- matrix(nrow = length(post.samples), ncol = n.params)
+    for(i in 1:nrow(post.samples.mat)){
+      samp <- post.samples[[i]]
+      p.vec <- unname(samp$p)
+      M.vec <- as.vector(samp$M)
+      gamma.vec <- samp$gamma
+      B.vec <- as.vector(samp$B)
+      post.samples.mat[i,] <- c(p.vec, M.vec, gamma.vec, B.vec)
+    }
+    ### Column names is first cause names (with prefix p)
+    ### then M (as.vector goes by column)
+    cnames <- c(paste0("p[", 1:C, "]"),
+                paste0(paste0("M[", rep(1:C, C), ","), rep(1:C, each = C), "]"),
+                paste0("gamma[", 1:C, "]"),
+                paste0(paste0("B[", rep(1:C, C), ","), rep(1:C, each = C), "]"))
     
-    #post.samples[[i]]$gamma <- gamma.init
-    #if((i%%1000)==0) print(paste("Run", i, post.samples[[i]]$gamma))
-    if((i%%10000)==0) message(paste("Draw", i))
-  }
-  ### Put everything into a matrix, to be converted into an mcmc object
-  ### Number of params is 2 * C ^ 2 (M matrix and B matrix) + 2 * p (gamma vector & p vector)
-  n.params <- 2 * C^2 + 2 * C
-  post.samples.mat <- matrix(nrow = length(post.samples), ncol = n.params)
-  for(i in 1:nrow(post.samples.mat)){
-    samp <- post.samples[[i]]
-    p.vec <- unname(samp$p)
-    M.vec <- as.vector(samp$M)
-    gamma.vec <- samp$gamma
-    B.vec <- as.vector(samp$B)
-    post.samples.mat[i,] <- c(p.vec, M.vec, gamma.vec, B.vec)
-  }
-  ### Column names is first cause names (with prefix p)
-  ### then M (as.vector goes by column)
-  cnames <- c(paste0("p[", 1:C, "]"),
-              paste0(paste0("M[", rep(1:C, C), ","), rep(1:C, each = C), "]"),
-              paste0("gamma[", 1:C, "]"),
-              paste0(paste0("B[", rep(1:C, C), ","), rep(1:C, each = C), "]"))
-  
-  colnames(post.samples.mat) <- cnames
-  return(mcmc(post.samples.mat))
-  #return(post.samples)
-}
-
-#' @title collect CSMF estimates from the CalibVA sampler
-#' @description \code{calibvaCSMF} collects draws of the CSMF estimates
-#' after running the \code{calibva.sampler} function, using the
-#' user supplied burn-in and thinning parameters
-#' 
-#' @param revamp.samples a list returned from \code{caliva.sampler}
-#' @param burnin an integer specifying the number of draws you wish to discard
-#' before collecting draws. Default is 1,000
-#' @param thin an integer specifying the amount the draws should be thinned by
-#' 
-#' @return a data frame with the values of the CSMF and the names of each cause
-#' for each of the draws that are obtained
-#' 
-#' @export
-calibvaCSMF <- function(calibva.samples, burnin = 1E3, thin = 5) {
-  causes <- names(calibva.samples[[1]]$p)
-  post.p <- lapply(seq(burnin, length(calibva.samples), by = thin), function(i) {
-    draw.p <- calibva.samples[[i]]$p
-    return(data.frame(p = draw.p, cause = causes, draw = i))
+    colnames(post.samples.mat) <- cnames
+    return(mcmc(post.samples.mat))
   })
-  return(do.call(rbind, post.p))
-} 
+  posterior.list <- mcmc.list(posterior.list)
+}
 
 ##########################
 ### test.cod.mat will be a N x K matrix, with entry i,j denoting estimated COD for indiv. i by alg. j
