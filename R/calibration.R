@@ -244,16 +244,16 @@ sample.gamma2 <- function(gamma.vec, epsilon, alpha, beta, M, tau.vec, max.gamma
 #' @param max.gamma The maximum value gamma is allowed to take in
 #' posterior samples. Default is 75.
 #'
-#' @return A \code{mcmc.list} object, with each element as \code{mcmc.object} containing
-#' a matrix with column for each parameter. Each of the \code{ndraws} rows contains the samples
-#' from the posterior draw for each parameter
+#' @return a mcmc.list of length \code{nchains}, where each element is a 
+#' \code{mcmc.object} containing the posterior draws for a given chain
 #'
 #' @import MCMCpack
 #'
 #' @export
 calibva.sampler <- function(test.cod, calib.cod = NULL, calib.truth = NULL, causes,
                            epsilon, alpha, beta, tau.vec, delta,
-                           gamma.init, ndraws, nchains = 1, init.seeds = NULL, max.gamma = 75, sample.gamma = TRUE,
+                           gamma.init, ndraws, nchains = 1, init.seeds = NULL,
+                           max.gamma = 75, sample.gamma = TRUE,
                            gamma.final = NULL) {
   v <- sapply(causes, function(c) sum(test.cod == c))
   C <- length(causes)
@@ -340,6 +340,7 @@ calibva.sampler <- function(test.cod, calib.cod = NULL, calib.truth = NULL, caus
     return(mcmc(post.samples.mat))
   })
   posterior.list <- mcmc.list(posterior.list)
+  return(posterior.list)
 }
 
 ##########################
@@ -380,7 +381,8 @@ calibva.sampler <- function(test.cod, calib.cod = NULL, calib.truth = NULL, caus
 #' @export
 calibva.ensemble.sampler <- function(test.cod.mat, calib.cod.mat, calib.truth, causes,
                                     epsilon, alpha, beta, tau.vec, delta,
-                                    gamma.init, ndraws, max.gamma = 75) {
+                                    gamma.init, ndraws, nchains = 1, init.seeds = NULL,
+                                    max.gamma = 75) {
   ### first get matrix of all combinations of j, where the j vector forms the rows
   K <- ncol(test.cod.mat)
   C <- length(causes)
@@ -491,18 +493,21 @@ calibva.ensemble.sampler <- function(test.cod.mat, calib.cod.mat, calib.truth, c
 #' @param delta A numeric value for the delta in the prior
 #' @param gamma.init A numeric value for the starting value of gammas
 #' @param ndraws The number of posterior samples to take
+#' @param nchains The number of chains. Default is 1
+#' @param init.seeds An optional numeric vector, of length nchains, with the initial seeds for each chain
 #' @param max.gamma The maximum value gamma is allowed to take in
 #' posterior samples. Default is 75.
 #'
-#' @return A list of length \code{ndraws} where each entry in the list contains
-#' the posterior draw for each parameter
+#' @return a mcmc.list of length \code{nchains}, where each element is a 
+#' \code{mcmc.object} containing the posterior draws for a given chain
 #'
 #' @import MCMCpack
 #'
 #' @export
 calibva.ensemble.lite.sampler <- function(test.cod.mat, calib.cod.mat, calib.truth, causes,
                                     epsilon, alpha, beta, tau.vec, delta,
-                                    gamma.init, ndraws, max.gamma = 75) {
+                                    gamma.init, ndraws, nchains = 1, init.seeds = NULL,
+                                    max.gamma = 75) {
   ### first get matrix of all combinations of j, where the j vector forms the rows
   K <- ncol(test.cod.mat)
   C <- length(causes)
@@ -527,71 +532,110 @@ calibva.ensemble.lite.sampler <- function(test.cod.mat, calib.cod.mat, calib.tru
       }
     }
   }
-  ### Initialize array of M matrices
-  M.array <- sapply(1:K, function(k) {
-    T.mat <- T.array[,,k]
-    M.mat <- initialize.M(T.mat)
-    for(i in 1:nrow(T.mat)){
-      if(sum(T.mat[i,]) > 0) {
-        #M.mat[i,] <- T.mat[i,] / sum(T.mat[i,])
-        M.mat[i,] <- rdirichlet(1, T.mat[i,] + 1)
-      }
+  if(is.null(init.seeds)){
+    set.seed(123)
+    init.seeds <- sample(-1e6:1e6, nchains, replace = F)
+  } else {
+    if(length(init.seeds) != nchains) {
+      stop("The init.seed vector needs to be of length nchains")
     }
-    return(M.mat)
-  }, simplify = 'array')
-  
-  post.samples <- vector("list", ndraws)
-  
-  post.samples[[1]]$M.array <- M.array
-  # post.samples[[1]]$p <- rep(1 / length(causes), length(causes))
-  init.p.list <- lapply(1:ncol(test.cod.mat), function(i) {
-    sapply(causes, function(c) mean(test.cod.mat[,i] == c))
-  })
-  init.p <- Reduce("+", init.p.list) / length(init.p.list)
-  init.p <- init.p / sum(init.p)
-  post.samples[[1]]$p <- init.p
-  # post.samples[[1]]$p <- sapply(causes, function(c) mean(test.cod.mat[,1] == c))
-  names(post.samples[[1]]$p) <- causes
-
-  B.array=sapply(1:K, function(k) {
-    sample.B(post.samples[[1]]$M.array[,,k], post.samples[[1]]$p, v[,k])    
-  }, simplify="array")
-  post.samples[[1]]$B.array <- B.array
-  
-  post.samples[[1]]$gamma.mat <- matrix(NA, nrow = C, ncol = K)
-  for(k in 1:K) {
-    T.mat <- T.array[,,k]
-    M.mat <- post.samples[[1]]$M.array[,,k]
-    post.samples[[1]]$gamma.mat[,k] <- sample.gamma2(rep(gamma.init, nrow(T.mat)), epsilon,
-                                                     alpha, beta, M.mat, tau.vec,
-                                                     max.gamma) 
   }
-  
-  for(i in 2:ndraws){
-    post.samples[[i]]$M.array <- sapply(1:k, function(k) 
-      sample.M2(post.samples[[i-1]]$B.array[,,k], 
-      post.samples[[i-1]]$gamma.mat[,k], epsilon, T.array[,,k]), simplify="array")
+  posterior.list <- lapply(seq_along(init.seeds), function(chain) {
+    seed <- init.seeds[chain]
+    set.seed(seed)
+    ### Initialize array of M matrices
+    M.array <- sapply(1:K, function(k) {
+      T.mat <- T.array[,,k]
+      M.mat <- initialize.M(T.mat)
+    }, simplify = 'array')
     
-    post.samples[[i]]$p <- sample.p.ensemble.lite(post.samples[[i-1]]$B, delta)
+    post.samples <- vector("list", ndraws)
     
-    names(post.samples[[i]]$p) <- causes
-
-    post.samples[[i]]$B.array <- sapply(1:K, function(k) {
-      sample.B(post.samples[[i]]$M.array[,,k], post.samples[[i]]$p, v[,k])    
+    post.samples[[1]]$M.array <- M.array
+    # post.samples[[1]]$p <- rep(1 / length(causes), length(causes))
+    init.p.list <- lapply(1:ncol(v), function(i) {
+      initialize.p(v[,i])
+    })
+    init.p <- Reduce("+", init.p.list) / length(init.p.list)
+    init.p <- init.p / sum(init.p)
+    post.samples[[1]]$p <- init.p
+    # post.samples[[1]]$p <- sapply(causes, function(c) mean(test.cod.mat[,1] == c))
+   # names(post.samples[[1]]$p) <- causes
+    
+    B.array=sapply(1:K, function(k) {
+      sample.B(post.samples[[1]]$M.array[,,k], post.samples[[1]]$p, v[,k])    
     }, simplify="array")
+    post.samples[[1]]$B.array <- B.array
     
-    post.samples[[i]]$gamma.mat <- matrix(NA, nrow = C, ncol = K)
+    post.samples[[1]]$gamma.mat <- matrix(NA, nrow = C, ncol = K)
     for(k in 1:K) {
-      M.mat <- post.samples[[i]]$M.array[,,k]
-      post.samples[[i]]$gamma.mat[,k] <- sample.gamma2(post.samples[[i-1]]$gamma.mat[,k],
-      epsilon, alpha, beta, M.mat, tau.vec, max.gamma) 
+      T.mat <- T.array[,,k]
+      M.mat <- post.samples[[1]]$M.array[,,k]
+      post.samples[[1]]$gamma.mat[,k] <- sample.gamma2(rep(gamma.init, nrow(T.mat)), epsilon,
+                                                       alpha, beta, M.mat, tau.vec,
+                                                       max.gamma) 
     }
-    #post.samples[[i]]$gamma <- gamma.init
-    #if((i%%1000)==0) print(paste("Run", i, post.samples[[i]]$gamma))
-    #print(paste("Draw", i))
-    if((i%%10000)==0) print(paste("Draw", i))
-  }
-  return(post.samples)
+    
+    for(i in 2:ndraws){
+      post.samples[[i]]$M.array <- sapply(1:k, function(k)
+        sample.M2(post.samples[[i-1]]$B.array[,,k], 
+                  post.samples[[i-1]]$gamma.mat[,k], epsilon, T.array[,,k]), simplify="array")
+      
+      post.samples[[i]]$p <- sample.p.ensemble.lite(post.samples[[i-1]]$B, delta)
+      
+      #names(post.samples[[i]]$p) <- causes
+      
+      post.samples[[i]]$B.array <- sapply(1:K, function(k) {
+        sample.B(post.samples[[i]]$M.array[,,k], post.samples[[i]]$p, v[,k])    
+      }, simplify="array")
+      
+      post.samples[[i]]$gamma.mat <- matrix(NA, nrow = C, ncol = K)
+      for(k in 1:K) {
+        M.mat <- post.samples[[i]]$M.array[,,k]
+        post.samples[[i]]$gamma.mat[,k] <- sample.gamma2(post.samples[[i-1]]$gamma.mat[,k],
+                                                         epsilon, alpha, beta, M.mat,
+                                                         tau.vec, max.gamma) 
+      }
+      #post.samples[[i]]$gamma <- gamma.init
+      #if((i%%1000)==0) print(paste("Run", i, post.samples[[i]]$gamma))
+      #print(paste("Draw", i))
+      if((i%%10000)==0) message(paste("Chain", chain, "Draw", i))
+    }
+    #return(post.samples)
+    ### Put everything into a matrix, to be converted into an mcmc object
+    ### Number of params is 2 * k * C ^ 2 (M matrix and B matrix for each algorithm)
+    ###                     + C (p vector) + K * C (gamma vector for each algorithm)
+    n.params <- 2 * K * C^2 + C + K * C
+    post.samples.mat <- matrix(nrow = length(post.samples), ncol = n.params)
+    for(i in 1:nrow(post.samples.mat)){
+      samp <- post.samples[[i]]
+      p.vec <- samp$p
+      M.vec <- unlist(lapply(1:K, function(k) as.vector(samp$M.array[,,k])))
+      gamma.vec <- unlist(lapply(1:K, function(k) samp$gamma.mat[,k]))
+      B.vec <- unlist(lapply(1:K, function(k) as.vector(samp$B.array[,,k])))
+      post.samples.mat[i,] <- c(p.vec, M.vec, gamma.vec, B.vec)
+    }
+    ### Column names is first cause names (with prefix p)
+    ### then M (as.vector goes by column)
+    p.names <- paste0("p[", 1:C, "]")
+    M.names <- unlist(lapply(1:K, function(k) {
+      paste0(paste0("M[", rep(1:C, C), ","), rep(1:C, each = C), ",", k, "]")
+    }))
+    gamma.names <- unlist(lapply(1:K, function(k) {
+      paste0("gamma[", 1:C, ",", k, "]")
+    }))
+    B.names <- unlist(lapply(1:K, function(k) {
+      paste0(paste0("B[", rep(1:C, C), ","), rep(1:C, each = C), ",", k, "]")
+    }))
+    cnames <- c(p.names,
+                M.names,
+                gamma.names,
+                B.names)
+    
+    colnames(post.samples.mat) <- cnames
+    return(mcmc(post.samples.mat))
+  })
+  return(mcmc.list(posterior.list))
 }
 
 

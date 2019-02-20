@@ -5,8 +5,8 @@
 \title{Performs Gibbs sampling for ensemble calibration}
 \usage{
 calibva.ensemble.sampler(test.cod.mat, calib.cod.mat, calib.truth, causes,
-  epsilon, alpha, beta, tau.vec, delta, gamma.init, ndraws,
-  max.gamma = 75)
+  epsilon, alpha, beta, tau.vec, delta, gamma.init, ndraws, nchains = 1,
+  init.seeds = NULL, max.gamma = 75)
 }
 \arguments{
 \item{test.cod.mat}{will be a N x K matrix, with entry i,j denoting estimated

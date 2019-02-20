@@ -44,9 +44,8 @@ of the gammas}
 posterior samples. Default is 75.}
 }
 \value{
-A \code{mcmc.list} object, with each element as \code{mcmc.object} containing
-a matrix with column for each parameter. Each of the \code{ndraws} rows contains the samples
-from the posterior draw for each parameter
+a mcmc.list of length \code{nchains}, where each element is a 
+\code{mcmc.object} containing the posterior draws for a given chain
 }
 \description{
 \code{calibva.sampler} takes in estimation of the underlying
