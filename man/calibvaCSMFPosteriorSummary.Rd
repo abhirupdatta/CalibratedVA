@@ -15,8 +15,7 @@ calibvaCSMFPosteriorSummary(calibvaCSMFPosteriorSamples,
 \item{percentile.U}{the upper percentile for a credible interval. Default .975}
 }
 \value{
-a tibble with the posterior means, and confidence intervals of the CSMF and the names of each cause
-for each of the draws that are obtained
+a tibble with the posterior means, and confidence intervals of the CSMF and the names of each cause, for each of the posterior samples that are obtained
 }
 \description{
 collect CSMF posterior summaries from the CalibVA sampler

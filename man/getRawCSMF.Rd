@@ -12,6 +12,10 @@ COD (as a character)for indiv. i}
 
 \item{causes}{is a character vector with the names of the causes you are interested i}
 }
+\value{
+a data frame with the causes as one column and the CSMF for each cause as 
+the second column
+}
 \description{
 Obtain raw CSMF estimates from verbal autopsy guesses
 }
