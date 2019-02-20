@@ -4,13 +4,11 @@
 \alias{calibvaCSMFPosteriorSummary}
 \title{collect CSMF posterior summaries from the CalibVA sampler}
 \usage{
-calibvaCSMFPosteriorSummary(calibva.samples, causes,
+calibvaCSMFPosteriorSummary(calibvaCSMFPosteriorSamples,
   percentile.L = 0.025, percentile.U = 0.975)
 }
 \arguments{
-\item{calibva.samples}{a list returned from \code{calibva.sampler}}
-
-\item{causes}{the cause vector input to CalibVA}
+\item{calibvaCSMFPosteriorSamples}{a tibble returned from \code{calibvaCSMFPosteriorSamples}}
 
 \item{percentile.L}{the lower percentile for a credible interval. Default .025}
 
