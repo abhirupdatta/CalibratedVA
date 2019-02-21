@@ -1,4 +1,4 @@
-gamma.h <- function(gamma.param, alpha, beta, epsilon) {
+gamma.h <- function(gamma.param, alpha, beta, epsilon, C) {
     #if(gamma.param > 75) {
     #    gamma.param <- 75
     #}
@@ -15,7 +15,7 @@ gamma.fn <- function(gamma.param, M, i, alpha, beta, epsilon) {
     C <- ncol(M)
     output <- 0
     for(j in 1:C){
-        add.term <- (gamma.param * epsilon + gamma.param * (i == j) - 1) * log(M[i,j]) + gamma.h(gamma.param, alpha, beta, epsilon)
+        add.term <- (gamma.param * epsilon + gamma.param * (i == j) - 1) * log(M[i,j]) + gamma.h(gamma.param, alpha, beta, epsilon, C)
         output <- output + add.term
     } 
     return(-output)
@@ -25,7 +25,7 @@ calibva.update.em <- function(params, v, T.mat, epsilon, alpha, beta, delta){
     C <- length(v)
     p <- params[1:C]
     M <- matrix(params[(C+1):(C + C^2)], ncol = C, nrow = C, byrow = FALSE)
-    gamma.vec <- params[(C + dim.M + 1):length(params)]
+    gamma.vec <- params[(C + C^2 + 1):length(params)]
     
     ### Update B (E-step)
     B <- matrix(NA, ncol = C, nrow = C)
