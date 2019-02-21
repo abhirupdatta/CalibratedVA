@@ -127,6 +127,7 @@ calibva.map <- function(test.cod, calib.cod = NULL, calib.truth = NULL, causes,
     em.results <- squarem(par = params0, fixptfn = calibva.update.em, v = v, T.mat = T.mat, 
                           epsilon = epsilon, alpha = alpha, beta = beta, delta = delta,
                           control = list(tol = tol, maxiter = maxiter))
+    message(paste("SQUAREM finished with", em.results$fpevals, "Evaluations"))
     p.em <- em.results$par[1:C]
     M.em <- matrix(em.results$par[(C+1):(C + C^2)], ncol = C, nrow = C, byrow = FALSE)
     gamma.em <- em.results$par[(C + C^2 + 1):length(em.results$par)]

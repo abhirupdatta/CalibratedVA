@@ -4,6 +4,9 @@
 #' @param causes the cause vector input to CalibVA
 #' @return a tibble with each row representing a draw from the posterior sample
 #' of the CSMF for a given cause 
+#' 
+#' @import ggmcmc
+#' 
 #' @export
 calibvaCSMFPosteriorSamples <- function(calibva.samples, causes) {
     C <- length(causes)
@@ -23,6 +26,8 @@ calibvaCSMFPosteriorSamples <- function(calibva.samples, causes) {
 #' @param percentile.U the upper percentile for a credible interval. Default .975
 #' 
 #' @return a tibble with the posterior means, and confidence intervals of the CSMF and the names of each cause, for each of the posterior samples that are obtained
+#' 
+#' @import dplyr
 #' 
 #' @export
 calibvaCSMFPosteriorSummary <- function(calibvaCSMFPosteriorSamples, percentile.L = .025, percentile.U = .975) {
@@ -95,6 +100,9 @@ normalizedMisclassificationMatrix <- function(T.mat) {
 #' with the posterior means stored as m_posterior_mean and the posterior variance
 #' stored as m_posterior_variance 
 #' 
+#' @import ggmcmc
+#' @import dplyr
+#' 
 #' @export
 mMatrixPosteriorSummary <- function(calibva.samples, causes, output.format = c("matrix", "tibble")[1]) {
     if(!(output.format %in% c("matrix", "tibble"))) {
@@ -124,4 +132,32 @@ mMatrixPosteriorSummary <- function(calibva.samples, causes, output.format = c("
         }
         return(list(m_posterior_mean = mean.M, m_posterior_var = var.M))
     }
+}
+
+acceptance.rate <- function(x) {
+    naccept <- 0
+    for(i in 2:length(x)) {
+        if(x[i] != x[i-1]) {
+            naccept <- naccept + 1
+        }
+    }
+    return(naccept / (length(x) + 1))
+}
+
+#' @title computes the acceptance rates for each gamma parameter from a
+#' \code{calibva.sampler} object for each chain
+#' @param calibva.samples a list returned from \code{calibva.sampler}
+#' @return a tibble giving the acceptance rate for each gamma parameter in a chain
+#' 
+#' @import ggmcmc
+#' @import dplyr
+#' 
+#' @export
+gamma_acceptance_rates <- function(calibva.samples) {
+    gamma.tibble <- ggs(calibva.samples, family = "gamma")
+    acceptance_rates <-
+        gamma.tibble %>%
+        group_by(Chain, Parameter) %>%
+        summarize(rate = acceptance.rate(value))
+    return(acceptance_rates)
 }

@@ -144,8 +144,8 @@ COD estimates.
 ```{r hyperparams}
 causes <- as.character(sort(unique(test.changedcod)))
 epsilon <- .001
-alpha <- .001
-beta <- .001
+alpha <- 5
+beta <- .1
 tau <- .1
 tau.vec <- rep(tau, length(causes))
 delta <- 1
@@ -168,7 +168,7 @@ tariff.calibva <- calibva.sampler(test.cod = tariff.train.cod.test,
                                   gamma.init=gamma.init, ndraws = ndraws,
                                   nchains = nchains,
                                   init.seeds = calibva.seeds)
-tariff.calibva <- window(tariff.calibva, start = 1e4, thin = 5)
+tariff.calibva <- window(tariff.calibva, start = 1e5, thin = 10)
 ```
 
 And now using the InSilicoVA predictions.
@@ -182,7 +182,7 @@ insilico.calibva <- calibva.sampler(test.cod = insilico.train.cod.test,
                                   gamma.init=gamma.init, ndraws = ndraws,
                                   nchains = nchains,
                                   init.seeds = calibva.seeds)
-insilico.calibva <- window(insilico.calibva, start = 1e4, thin = 5)
+insilico.calibva <- window(insilico.calibva, start = 1e5, thin = 10)
 ```
 
 ## Obtaining CalibratedVA output
@@ -258,7 +258,7 @@ ensemble.calibva <- calibva.ensemble.lite.sampler(test.cod.mat = test.cod.mat,
                                                   gamma.init=gamma.init, ndraws = ndraws,
                                                   nchains = nchains,
                                                   init.seeds = calibva.seeds)
-ensemble.calibva <- window(ensemble.calibva, start = 1e4, thin = 5)
+ensemble.calibva <- window(ensemble.calibva, start = 1e5, thin = 10)
 ```
 
 
