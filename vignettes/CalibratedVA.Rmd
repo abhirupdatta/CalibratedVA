@@ -154,8 +154,7 @@ ndraws <- 50E3
 nchains <- 3
 ```
 
-We will first run CalibratedVA using the Tariff predictions, and then use
-a burn-in of 10,000 samples and a thinning parameter of 10.
+We will first run CalibratedVA using the Tariff predictions
 
 ```{r tariff_calibva, cache = TRUE, message = FALSE}
 set.seed(123)
@@ -167,8 +166,25 @@ tariff.calibva <- calibva.sampler(test.cod = tariff.train.cod.test,
                                   tau.vec=tau.vec, delta=delta,
                                   gamma.init=gamma.init, ndraws = ndraws,
                                   nchains = nchains,
-                                  init.seeds = calibva.seeds)
-tariff.calibva <- window(tariff.calibva, start = 1e5, thin = 10)
+                                  init.seeds = calibva.seeds,
+                                  max.gamma = 1E3)
+
+```
+
+Before thinning, we may want to see what the acceptance rates are for our MH
+draws of gamma. Acceptance rates that are too high means we will want to
+choose a higher value of tau, and acceptance rates that are too low means
+we should choose a smaller value of tau.
+
+```{r gamma_acceptance_rates_tariff}
+gamma_acceptance_rates(tariff.calibva)
+```
+
+We will then use a burn-in of 10,000 for each chain and also thin the chains by a
+factor of 10
+
+```{r tariff_thin_burnin}
+tariff.calibva <- window(tariff.calibva, start = 10e3, thin = 10)
 ```
 
 And now using the InSilicoVA predictions.
@@ -182,7 +198,7 @@ insilico.calibva <- calibva.sampler(test.cod = insilico.train.cod.test,
                                   gamma.init=gamma.init, ndraws = ndraws,
                                   nchains = nchains,
                                   init.seeds = calibva.seeds)
-insilico.calibva <- window(insilico.calibva, start = 1e5, thin = 10)
+insilico.calibva <- window(insilico.calibva, start = 10E3, thin = 10)
 ```
 
 ## Obtaining CalibratedVA output
@@ -241,6 +257,17 @@ tariff.posterior.M$m_posterior_var
 
 We can see that we estimate there to be substantial misclassficiation for individuals
 with true COD 17 and 9.
+
+Finally, if we were only interested in point estimates of p and M, we can use
+MAP estimation, with the SQUAREM package
+
+```{r tariff_map, eval = F}
+tariff.map <- calibva.map(test.cod = tariff.train.cod.test,
+                          calib.cod = tariff.train.cod.calib,
+                          calib.truth = calibration.changedcod, causes = causes,
+                          epsilon = epsilon, alpha=alpha, beta=beta,
+                          delta=delta)
+```
 
 ## Implementing Ensemble CalibratedVA
 

@@ -153,9 +153,9 @@ log.pi2 <- function(gamma.val, e, alpha, beta, M, M.row, tol=.00001) {
   gammafn.q2 <- gamma.val * e + tol
   gammafn.q3 <- gamma.val * e + gamma.val + tol
   first.term <-
-    log(gamma(gammafn.q1)) -
-    (C - 1) * log(gamma(gammafn.q2)) -
-    log(gamma(gammafn.q3) + tol)
+    lgamma(gammafn.q1) -
+    (C - 1) * lgamma(gammafn.q2) -
+    lgamma(gammafn.q3) 
   second.term <- (alpha - 1) * log(gamma.val + tol) - beta * gamma.val
   M.vec <- M[M.row,]
   M.gamma <- M.vec[M.row]
