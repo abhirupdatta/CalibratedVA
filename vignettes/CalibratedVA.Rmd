@@ -145,7 +145,7 @@ COD estimates.
 causes <- as.character(sort(unique(test.changedcod)))
 epsilon <- .001
 alpha <- 5
-beta <- .1
+beta <- .5
 tau <- .5
 tau.vec <- rep(tau, length(causes))
 delta <- 1
@@ -166,8 +166,7 @@ tariff.calibva <- calibva.sampler(test.cod = tariff.train.cod.test,
                                   tau.vec=tau.vec, delta=delta,
                                   gamma.init=gamma.init, ndraws = ndraws,
                                   nchains = nchains,
-                                  init.seeds = calibva.seeds,
-                                  max.gamma = 1E3)
+                                  init.seeds = calibva.seeds)
 
 ```
 
@@ -191,13 +190,13 @@ And now using the InSilicoVA predictions.
 
 ```{r insilico_calibva, cache = TRUE, mesage = FALSE}
 insilico.calibva <- calibva.sampler(test.cod = insilico.train.cod.test,
-                                  calib.cod = insilico.train.cod.calib,
-                                  calib.truth = calibration.changedcod, causes = causes,
-                                  epsilon = epsilon, alpha=alpha, beta=beta,
-                                  tau.vec=tau.vec, delta=delta,
-                                  gamma.init=gamma.init, ndraws = ndraws,
-                                  nchains = nchains,
-                                  init.seeds = calibva.seeds)
+                                    calib.cod = insilico.train.cod.calib,
+                                    calib.truth = calibration.changedcod, causes = causes,
+                                    epsilon = epsilon, alpha=alpha, beta=beta,
+                                    tau.vec=tau.vec, delta=delta,
+                                    gamma.init=gamma.init, ndraws = ndraws,
+                                    nchains = nchains,
+                                    init.seeds = calibva.seeds)
 insilico.calibva <- window(insilico.calibva, start = 10E3, thin = 10)
 ```
 
@@ -206,7 +205,8 @@ insilico.calibva <- window(insilico.calibva, start = 10E3, thin = 10)
 The `calibva.sampler` output is a `mcmc.list` object of length `nchains`. Each element in this list is a `mcmc` object, which contains a `ndraw` x `nparam` matrix, each each row
 representing the posterior draw. We are most interested in the posterior
 draws for the CSMF parameters, which we can extract using `calibvaCSMFPosteriorSamples` function.
-This function utilizes the `ggs` function from the `ggmcmc` package.
+This function utilizes the `ggs` function from the `ggmcmc` package. We will demonstrate
+how to obtain CalibratedVA output using the output from Tariff.
 
 ```{r extract_tariff_csmf}
 library(tidyverse)
@@ -256,17 +256,28 @@ tariff.posterior.M$m_posterior_var
 ```
 
 We can see that we estimate there to be substantial misclassficiation for individuals
-with true COD 17 and 9.
+with true COD 17 and 9. We can compare the posterior mean of the M matrix,
+which is shrunken towards the identity matrix, to the empirical estimate of M.
+
+```{r tariff_m_matrix_empirical}
+T.emp <-rawMisclassificationMatrix(calib.cod = insilico.train.cod.calib,
+                                   calib.truth = calibration.changedcod,
+                                   causes = causes)
+M.emp <- normalizedMisclassificationMatrix(T.emp)
+M.emp
+```
 
 Finally, if we were only interested in point estimates of p and M, we can use
 MAP estimation, with the SQUAREM package
 
-```{r tariff_map, eval = F}
+```{r tariff_map, message = FALSE}
 tariff.map <- calibva.map(test.cod = tariff.train.cod.test,
                           calib.cod = tariff.train.cod.calib,
                           calib.truth = calibration.changedcod, causes = causes,
                           epsilon = epsilon, alpha=alpha, beta=beta,
                           delta=delta)
+tariff.map$p
+tariff.map$M
 ```
 
 ## Implementing Ensemble CalibratedVA
@@ -285,7 +296,7 @@ ensemble.calibva <- calibva.ensemble.lite.sampler(test.cod.mat = test.cod.mat,
                                                   gamma.init=gamma.init, ndraws = ndraws,
                                                   nchains = nchains,
                                                   init.seeds = calibva.seeds)
-ensemble.calibva <- window(ensemble.calibva, start = 1e5, thin = 10)
+ensemble.calibva <- window(ensemble.calibva, start = 10E3, thin = 10)
 ```
 
 
