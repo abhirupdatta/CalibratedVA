@@ -2,7 +2,9 @@
 title: "CalibratedVA"
 author: "Jacob Fiksel and Abhirup Datta"
 date: "`r Sys.Date()`"
-output: rmarkdown::github_document
+output:
+  html_vignette:
+    keep_md: true
 bibliography: bibliography.bib
 vignette: >
   %\VignetteIndexEntry{CalibratedVA}
