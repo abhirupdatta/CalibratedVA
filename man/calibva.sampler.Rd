@@ -4,9 +4,10 @@
 \alias{calibva.sampler}
 \title{Performs Gibbs sampling for calibration}
 \usage{
-calibva.sampler(test.cod, calib.cod, calib.truth, causes, epsilon, alpha,
-  beta, tau.vec, delta, gamma.init, ndraws, max.gamma = 75,
-  sample.gamma = TRUE, gamma.final = NULL)
+calibva.sampler(test.cod, calib.cod = NULL, calib.truth = NULL, causes,
+  epsilon, alpha, beta, tau.vec, delta, gamma.init, ndraws, nchains = 1,
+  init.seeds = NULL, max.gamma = 75, sample.gamma = TRUE,
+  gamma.final = NULL)
 }
 \arguments{
 \item{test.cod}{will be a vector of length N, with each entry as the estimated
@@ -33,14 +34,18 @@ of the gammas}
 
 \item{gamma.init}{A numeric value for the starting value of gammas}
 
-\item{ndraws}{The number of posterior samples to take}
+\item{ndraws}{The number of posterior samples to take within each chain}
+
+\item{nchains}{The number of chains}
+
+\item{init.seeds}{An optional numeric vector, of length nchains, with the initial seeds for each chain}
 
 \item{max.gamma}{The maximum value gamma is allowed to take in
 posterior samples. Default is 75.}
 }
 \value{
-A list of length \code{ndraws} where each entry in the list contains
-the posterior draw for each parameter
+a mcmc.list of length \code{nchains}, where each element is a 
+\code{mcmc.object} containing the posterior draws for a given chain
 }
 \description{
 \code{calibva.sampler} takes in estimation of the underlying

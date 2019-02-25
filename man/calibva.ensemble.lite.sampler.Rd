@@ -6,7 +6,7 @@
 \usage{
 calibva.ensemble.lite.sampler(test.cod.mat, calib.cod.mat, calib.truth,
   causes, epsilon, alpha, beta, tau.vec, delta, gamma.init, ndraws,
-  max.gamma = 75)
+  nchains = 1, init.seeds = NULL, max.gamma = 75)
 }
 \arguments{
 \item{test.cod.mat}{will be a N x K matrix, with entry i,j denoting estimated
@@ -35,12 +35,16 @@ of the gammas}
 
 \item{ndraws}{The number of posterior samples to take}
 
+\item{nchains}{The number of chains. Default is 1}
+
+\item{init.seeds}{An optional numeric vector, of length nchains, with the initial seeds for each chain}
+
 \item{max.gamma}{The maximum value gamma is allowed to take in
 posterior samples. Default is 75.}
 }
 \value{
-A list of length \code{ndraws} where each entry in the list contains
-the posterior draw for each parameter
+a mcmc.list of length \code{nchains}, where each element is a 
+\code{mcmc.object} containing the posterior draws for a given chain
 }
 \description{
 \code{calibva.ensemble.lite.sampler} takes in the top estimated COD
