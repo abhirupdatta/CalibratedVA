@@ -3,6 +3,7 @@
 To install package in R, first install the `devtools` package. Then enter
 
 ```
+install.packages('Rsolnp')
 devtools::install_github("jfiksel/CalibratedVA")
 ```
 

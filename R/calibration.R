@@ -577,9 +577,12 @@ calibva.ensemble.lite.sampler <- function(test.cod.mat, calib.cod.mat, calib.tru
     }
     
     for(i in 2:ndraws){
-      post.samples[[i]]$M.array <- sapply(1:k, function(k)
-        sample.M2(post.samples[[i-1]]$B.array[,,k], 
-                  post.samples[[i-1]]$gamma.mat[,k], epsilon, T.array[,,k]), simplify="array")
+      # post.samples[[i]]$M.array <- sapply(1:k, function(k)
+      #   sample.M2(post.samples[[i-1]]$B.array[,,k], 
+      #             post.samples[[i-1]]$gamma.mat[,k], epsilon, T.array[,,k]), simplify="array")
+        post.samples[[i]]$M.array <- sapply(1:K, function(k)
+            sample.M2(post.samples[[i-1]]$B.array[,,k], 
+                      post.samples[[i-1]]$gamma.mat[,k], epsilon, T.array[,,k]), simplify="array")
       
       post.samples[[i]]$p <- sample.p.ensemble.lite(post.samples[[i-1]]$B, delta)
       
