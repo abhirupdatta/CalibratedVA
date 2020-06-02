@@ -170,6 +170,7 @@ tariff.calibva <- calibva.sampler(test.cod = tariff.train.cod.test,
 
 ```
 
+
 Before thinning, we may want to see what the acceptance rates are for our MH
 draws of gamma. Acceptance rates that are too high means we will want to
 choose a higher value of tau, and acceptance rates that are too low means
@@ -185,6 +186,7 @@ factor of 10
 ```{r tariff_thin_burnin}
 tariff.calibva <- window(tariff.calibva, start = 10e3, thin = 10)
 ```
+
 
 And now using the InSilicoVA predictions.
 
