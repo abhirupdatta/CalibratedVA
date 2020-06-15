@@ -4,8 +4,11 @@
 \alias{calibvaCSMFPosteriorSummary}
 \title{collect CSMF posterior summaries from the CalibVA sampler}
 \usage{
-calibvaCSMFPosteriorSummary(calibvaCSMFPosteriorSamples,
-  percentile.L = 0.025, percentile.U = 0.975)
+calibvaCSMFPosteriorSummary(
+  calibvaCSMFPosteriorSamples,
+  percentile.L = 0.025,
+  percentile.U = 0.975
+)
 }
 \arguments{
 \item{calibvaCSMFPosteriorSamples}{a tibble returned from \code{calibvaCSMFPosteriorSamples}}

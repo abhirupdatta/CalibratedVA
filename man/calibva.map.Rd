@@ -4,9 +4,19 @@
 \alias{calibva.map}
 \title{Obtains the MAP estimates for parameters using SQUAREM}
 \usage{
-calibva.map(test.cod, calib.cod = NULL, calib.truth = NULL, causes,
-  epsilon = 0.001, alpha = 5, beta = 0.5, delta = 1,
-  init.seed = NULL, tol = 1e-08, maxiter = 50000)
+calibva.map(
+  test.cod,
+  calib.cod = NULL,
+  calib.truth = NULL,
+  causes,
+  epsilon = 0.001,
+  alpha = 5,
+  beta = 0.5,
+  delta = 1,
+  init.seed = NULL,
+  tol = 1e-08,
+  maxiter = 50000
+)
 }
 \arguments{
 \item{test.cod}{will be a vector of length N, with each entry as the estimated

@@ -4,8 +4,11 @@
 \alias{mMatrixPosteriorSummary}
 \title{Get the posterior mean and variance for the M matrix}
 \usage{
-mMatrixPosteriorSummary(calibva.samples, causes,
-  output.format = c("matrix", "tibble")[1])
+mMatrixPosteriorSummary(
+  calibva.samples,
+  causes,
+  output.format = c("matrix", "tibble")[1]
+)
 }
 \arguments{
 \item{calibva.samples}{a mcmc.list object with samples from the CalibVA sampler}
