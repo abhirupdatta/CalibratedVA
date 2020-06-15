@@ -5,7 +5,7 @@
 #' @return a tibble with each row representing a draw from the posterior sample
 #' of the CSMF for a given cause 
 #' 
-#' @import ggmcmc
+#' @importFrom ggmcmc ggs
 #' 
 #' @export
 calibvaCSMFPosteriorSamples <- function(calibva.samples, causes) {

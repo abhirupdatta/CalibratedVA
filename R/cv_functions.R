@@ -2,37 +2,7 @@ library(loo)
 library(LaplacesDemon)
 ### params says which parameters to get multi-modal information for
 ### either all, or just p
-is_multimodal_single_alg <- function(calibration, C, cutoff = .05, params = "all") {
-    if(params == "all") {
-        param_vec <- 1:(C + C^2)
-    }
-    if(params == "p") {
-        param_vec <- 1:C
-    }
-    multimodalnodes <- sapply(param_vec, function(c) {
-        #print(c)
-        myvec <- unlist(calibration[,c])
-        myvec[myvec == 0] <- .0001
-        laplace_modes <- Modes(myvec)$modes
-        if(length(laplace_modes) == 1) {
-            return(FALSE)
-        } else {
-            min.mode <- min(laplace_modes)
-            max.mode <- max(laplace_modes)
-            if(abs(max.mode - min.mode) <= cutoff) {
-                return(FALSE)
-            } else {
-                return(TRUE)
-            }
-        }
-        #return(is.multimodal(unlist(calibration[,c]), min.size = .4))
-    })
-    ### is it multi-modal?
-    multimodal  <- sum(multimodalnodes) >= 1
-    return(multimodal)
-}
-
-is_multimodal_ensemble <- function(calibration, C, K = NA, cutoff = .05, params = "all") {
+is_multimodal <- function(calibration, C, K = NA, cutoff = .05, params = "all") {
     if(params == "all") {
         param_vec <- 1:(C + K * C^2)
     }
@@ -76,19 +46,19 @@ max_r_hat_p <- function(calibration) {
 
 
 
-pick_lambda <- function(waic_df, lambda_vec) {
-    for(i in 1:length(lambda_vec)) {
-        ### Filter df to lambda greater than current value
-        waic_df_filtered <- filter(waic_df, lambda >= lambda_vec[i])
-        ### Number of remaining lambda that are eligible
+pick_param <- function(waic_df, param_vec) {
+    for(i in 1:length(param_vec)) {
+        ### Filter df to param greater than current value
+        waic_df_filtered <- filter(waic_df, param >= param_vec[i])
+        ### Number of remaining param that are eligible
         neligible <- sum(waic_df_filtered$rhat_max <= 1.05 & !waic_df_filtered$multimodal)
         ### Once we get down to all eligible, get the one with the smallest WAIC
         if(neligible == 0) {
-            return(lambda_vec[length(lambda_vec)])
+            return(param_vec[length(param_vec)])
         }
         if(neligible == nrow(waic_df_filtered)){
-            best_lambda <- waic_df_filtered$lambda[which.min(waic_df_filtered$waic_calib)]
-            return(best_lambda)
+            best_param <- waic_df_filtered$param[which.min(waic_df_filtered$waic_calib)]
+            return(best_param)
         } 
     }
 }
@@ -100,23 +70,6 @@ pick_lambda_p_multimodal <- function(waic_df, lambda_vec) {
         waic_df_filtered <- filter(waic_df, lambda >= lambda_vec[i])
         ### Number of remaining lambda that are eligible
         neligible <- sum(waic_df_filtered$rhat_max <= 1.05 & !waic_df_filtered$multimodal_p)
-        ### Once we get down to all eligible, get the one with the smallest WAIC
-        if(neligible == 0) {
-            return(lambda_vec[length(lambda_vec)])
-        }
-        if(neligible == nrow(waic_df_filtered)){
-            best_lambda <- waic_df_filtered$lambda[which.min(waic_df_filtered$waic_calib)]
-            return(best_lambda)
-        } 
-    }
-}
-
-pick_lambda_fixedm <- function(waic_df, lambda_vec) {
-    for(i in 1:length(lambda_vec)) {
-        ### Filter df to lambda greater than current value
-        waic_df_filtered <- filter(waic_df, lambda >= lambda_vec[i])
-        ### Number of remaining lambda that are eligible
-        neligible <- sum(waic_df_filtered$rhat_p_max <= 1.05 & !waic_df_filtered$multimodal)
         ### Once we get down to all eligible, get the one with the smallest WAIC
         if(neligible == 0) {
             return(lambda_vec[length(lambda_vec)])

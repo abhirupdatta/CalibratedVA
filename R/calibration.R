@@ -149,3 +149,87 @@ calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
     output <- list(samples = samples, A_U = A_U, A_L = A_L, G_L = G_L)
     return(output)
 }
+
+cv_calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
+                            method = c("mshrink", "pshrink"),
+                            alpha_vec = NULL, lamda_vec = NULL,
+                            which.multimodal = "all",
+                            which.rhat = "all",
+                            ...) {
+    log10vec <- c(-3, -2, seq(-1, 2, length = 23))
+    if(is.null(alpha_vec)) {
+        alpha_vec <- 10^log10vec
+    }
+    if(is.null(lambda_vec)) {
+        lambda_vec=10^(log10vec)
+    }
+    if(method == "mshrink") {
+        samples_list <- lapply(seq_along(alpha_vec), function(alpha) {
+            calibrateva_out <- calibratedva(A_U, A_L, G_L, causes, method = "mshrink",
+                                    alpha = alpha, ...)
+            return(calibrateva_out$samples)
+        })
+    } else {
+        samples_list <- lapply(seq_along(lambda_vec), function(lambda) {
+            calibrateva_out <- calibratedva(A_U, A_L, G_L, causes, method = "pshrink",
+                                            lambda = lambda, ...)
+            return(calibrateva_out)
+        })
+    }
+    ### now check whether we're using ensemble or not
+    is_ensemble <- is.list(A_U)
+    K <- ifelse(is_ensemble, length(A_U), 1)
+    ### Format A_U and A_L into arrays (only if they are in list format i.e. ensemble)
+    if(is_ensemble) {
+        C <- length(causes)
+        N_U <-  nrow(A_L[[1]])
+        A_U_array <- A_L_array <- array(NA, dim = c(N_U, C, K))
+        for(k in 1:K) {
+            A_U_array[,,k] <- A_U[[k]]
+            A_L_array[,,k] <- A_L[[k]]
+        }
+        A_U <- A_U_array
+        A_L <- A_L_array
+    } 
+    waic_df <- do.call(rbind, lapply(seq_along(samples_list), function(i) {
+        calibration <- samples_list[[i]]$samples
+        multimodal <- ifelse(which.multimodal == "all",
+                             is_multimodal(calibration, C = C, K = K),
+                             is_multimodal(calibration, C = C, params = "p"))
+        if(is_ensemble) {
+            waic <- get_waic(calibration,
+                             A_U = A_U,
+                             A_L = A_L,
+                             G_L = G_L,
+                             method = "ensemble") 
+        } else {
+            waic <- get_waic(calibration,
+                             A_U = A_U,
+                             A_L = A_L,
+                             G_L = G_L,
+                             method = "single_alg")
+        }
+        rhat_max <- ifelse(which.rhat == "all",
+                           max_r_hat(calibration),
+                           max_r_hat_p(calibration))
+        param <- ifelse(method == "mshrink", alpha_vec[i], lambda_vec[i])
+        df <- data.frame(param = param, 
+                         waic_calib = waic,
+                         multimodal = multimodal, 
+                         rhat_max = rhat_max,
+                         cvindex = i)
+        return(df)
+    }))
+    ### pick final model
+    waic_df <- arrange(waic_df, param)
+    my_param <- pick_param(waic_df)
+    alpha_final <- ifelse(method == "mshrink", my_param, NULL)
+    lambda_final <- ifelse(method == "pshrink", my_param, NULL)
+    param_index <- ifelse(method == "mshrink",
+                          which(alpha_vec == my_param),
+                          which(lambda_vec == my_param))
+    final_samples <- samples_list[[param_index]]
+    return(list(calibratedva_final_model = final_samples,
+                alpha_final = alpha_final, lambda_final = lambda_final,
+                waic_df = waic_df))
+}
