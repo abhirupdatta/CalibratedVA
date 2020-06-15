@@ -1,4 +1,3 @@
-library(gtools)
 library(loo)
 library(LaplacesDemon)
 ### params says which parameters to get multi-modal information for
