@@ -29,15 +29,6 @@ calibratedva_mshrink <- function(A_U, A_L = NULL, G_L = NULL, causes, ndraws = 1
     if(is.null(A_L) | is.null(G_L)) {
         T.array <- array(0, dim = c(C, C, K))
     } else {
-        T.array <- array(NA, dim = c(C, C, K))
-        for(k in 1:K) {
-            T.array[,,k] <- create_T(A_L[,,k], G_L, C, power)
-        }
-    }
-    ################### Multi-cause
-    if(is.null(A_L) | is.null(G_L)) {
-        T.array <- array(0, dim = c(C, C, K))
-    } else {
         ### create T matrix for those with single cause
         A_L_int <- A_L
         for(k in 1:K) {
@@ -46,7 +37,10 @@ calibratedva_mshrink <- function(A_U, A_L = NULL, G_L = NULL, causes, ndraws = 1
         ### Make pseudo latent variables for labeled set
         is_sc <- which(rowSums(G_L == 1) == 1)
         if(length(is_sc) > 0) {
-            A_L_int_mc <- A_L_int[-is_sc,]
+            A_L_int_mc <- A_L_int[-is_sc,,]
+            if(length(dim(A_L_int_mc)) == 2) {
+                A_L_int_mc <- matrix_to_array(A_L_int_mc)
+            }
             G_L_mc <- G_L[-is_sc,]
             T.array.sc <- array(NA, dim = c(C, C, K))
             for(k in 1:K) {
@@ -64,7 +58,6 @@ calibratedva_mshrink <- function(A_U, A_L = NULL, G_L = NULL, causes, ndraws = 1
         post.samples <- vector("list", ndraws)
         ### Initialize array of M matrices
         M.array <- sapply(1:K, function(k) {
-            T.mat <- T.array[,,k]
             M.mat <- initialize.M(C)
         }, simplify = 'array')
         post.samples[[1]]$M.array <- M.array
@@ -92,12 +85,13 @@ calibratedva_mshrink <- function(A_U, A_L = NULL, G_L = NULL, causes, ndraws = 1
         }
         gamma.init.mat <- matrix(NA, nrow = C, ncol = K)
         for(k in 1:K) {
-            gamma.init.mat[,k] <- rgamma(C, alpha[k], beta) 
+            gamma.init.mat[,k] <- runif(C, 0, 5) 
         }
+        ### Can't have 0s
+        gamma.init.mat[gamma.init.mat < 1e-8] <- 1e-8
         
         post.samples[[1]]$gamma.mat <- matrix(NA, nrow = C, ncol = K)
         for(k in 1:K) {
-            T.mat <- T.array[,,k]
             M.mat <- post.samples[[1]]$M.array[,,k]
             post.samples[[1]]$gamma.mat[,k] <- sample.gamma(gamma.init.mat[,k],
                                                             epsilon,

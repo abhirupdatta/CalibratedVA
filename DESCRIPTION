@@ -10,11 +10,13 @@ Description: Uses Gibbs sampling to estimate the true underlying distribution
     of cause of disease when you have access to a calibration set and an
     imperfect training set
 Imports:
-    MCMCpack,
     dplyr,
     ggmcmc,
     gtools,
-    coda
+    coda,
+    LaplacesDemon,
+    loo,
+    future.apply
 License: GPL-3
 Encoding: UTF-8
 LazyData: true

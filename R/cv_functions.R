@@ -1,5 +1,3 @@
-library(loo)
-library(LaplacesDemon)
 ### params says which parameters to get multi-modal information for
 ### either all, or just p
 is_multimodal <- function(calibration, C, K = NA, cutoff = .05, params = "all") {

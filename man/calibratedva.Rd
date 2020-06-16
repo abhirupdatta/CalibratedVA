@@ -10,10 +10,18 @@ calibratedva(
   G_L = NULL,
   causes,
   method = c("mshrink", "pshrink"),
+  nchains = 3,
   ndraws = 10000,
   burnin = 1000,
   thin = 1,
-  ...
+  pseudo_samplesize = 100,
+  alpha = 5,
+  beta = 0.5,
+  lambda = 1,
+  delta = 1,
+  epsilon = 0.001,
+  tau = 0.5,
+  init.seed = 123
 )
 }
 \arguments{
@@ -25,17 +33,21 @@ When using predictions from multiple algorithms for the ensemble approach, this 
 be a list of matrices with algorithm predictions for the same individuals, where each
 entry in the list are predictions from a given algorithm. See examples for more information}
 
-\item{A_L}{A matrix or array in the same format as A_U, but for individuals with labeled
+\item{A_L}{A matrix or list in the same format as A_U, but for individuals with labeled
 causes of death. If there are no individuals with labeled causes, leave as NULL}
 
 \item{G_L}{A matrix where each row represents either the true cause for an individual
 with a labeled cause of death (i.e. if the label for individual i is cause j, then
 G_L[i,j] will be 1, and the other entries of that row will be 0), or the probabilities
-that each individual died of a certain cause}
+that each individual died of a certain cause. The rows of \code{G_L} should correspond
+to the rows of \code{A_L} (or the rows of each element of \code{A_L} if it is a list)}
 
-\item{causes}{A character vector with the}
+\item{causes}{A character vector with the names of the causes. These should correspond to
+the columns of \code{A_U}, \code{A_L}, and \code{G_L}}
 
 \item{method}{One of either "mshrink" (default) for M-shrinkage or "pshrink" for p-shrinkage}
+
+\item{nchains}{The number of chains. Default is 3}
 
 \item{ndraws}{Number of draws in each chain. Default is 10,000}
 
@@ -43,11 +55,37 @@ that each individual died of a certain cause}
 
 \item{thin}{Thinning parameter. Default is no thinning}
 
-\item{...}{Additional arguments (such as hyperparameter values) passed into
-the sampling functions (TO DOCUMENT)}
+\item{pseudo_samplesize}{The number of pseudo samples (T) used for the 
+Gibbs Sampler using rounding and coarsening. Default is 100.}
+
+\item{alpha}{A numeric value for the alpha in the prior of gamma when using M-shrinkage.
+Higher values (relative to beta) leads to more shrinkage. Default is 5. If using
+the ensemble model, a vector of length K can be used (where K is the number of algorithms).}
+
+\item{beta}{A numeric value for the beta in the prior of gamma when using M-shrinkage.
+Default is .5.}
+
+\item{lambda}{A numeric value for the lambda in the prior of p for p-shrinkage.
+Higher values leads to more shrinkage. Default is 1.
+#' @param delta A numeric value for the delta in the prior of p. Only used for
+M-shrinkage sampling.}
+
+\item{epsilon}{A numeric value for the epsilon in the prior of M. Default is .001.}
+
+\item{init.seed}{The initial seed for L’Ecuyer-CMRG RNG stream generation. Default is 123.}
+
+\item{tau.vec}{A numeric vector for the log standard deviation for the sampling distributions
+of the gammas. Only used for M-shrinkage sampling.}
 }
 \value{
-A list
+A list with the following components.
+\describe{
+  \item{samples}{A \code{\link[coda]{mcmc.list}} object containing the posterior samples
+  for p, M, and gamma (if using M-shrinkage)}
+  \item{A_U}{The value of \code{A_U} using for the posterior samples}
+  \item{A_L}{The value of \code{A_L} using for the posterior samples}
+  \item{G_L}{The value of \code{G_L} using for the posterior samples}
+}
 }
 \description{
 Takes in estimated causes (or cause probabilities) for both a

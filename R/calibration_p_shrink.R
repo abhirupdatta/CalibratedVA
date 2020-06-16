@@ -1,4 +1,5 @@
 calibratedva_pshrink <- function(A_U, A_L = NULL, G_L = NULL, causes,
+                                 power = 1 / 100,
                                  lambda = 1, ndraws = 10000,
                                  burnin = 1000, thin = 1,
                                  epsilon = .001,
@@ -22,16 +23,7 @@ calibratedva_pshrink <- function(A_U, A_L = NULL, G_L = NULL, causes,
         v[,k] <- create_v(A_U[,,k], power)
     }
     
-    ### Make pseudo latent variables for labeled set
-    if(is.null(A_L) | is.null(G_L)) {
-        T.array <- array(0, dim = c(C, C, K))
-    } else {
-        T.array <- array(NA, dim = c(C, C, K))
-        for(k in 1:K) {
-            T.array[,,k] <- create_T(A_L[,,k], G_L, C, power)
-        }
-    }
-    ################### Multi-cause
+    ### Make pseudo latent variables for labeled set 
     if(is.null(A_L) | is.null(G_L)) {
         T.array <- array(0, dim = c(C, C, K))
     } else {
@@ -43,7 +35,10 @@ calibratedva_pshrink <- function(A_U, A_L = NULL, G_L = NULL, causes,
         ### Make pseudo latent variables for labeled set
         is_sc <- which(rowSums(G_L == 1) == 1)
         if(length(is_sc) > 0) {
-            A_L_int_mc <- A_L_int[-is_sc,]
+            A_L_int_mc <- A_L_int[-is_sc,,]
+            if(length(dim(A_L_int_mc)) == 2) {
+                A_L_int_mc <- matrix_to_array(A_L_int_mc)
+            }
             G_L_mc <- G_L[-is_sc,]
             T.array.sc <- array(NA, dim = c(C, C, K))
             for(k in 1:K) {
@@ -61,7 +56,6 @@ calibratedva_pshrink <- function(A_U, A_L = NULL, G_L = NULL, causes,
         post.samples <- vector("list", ndraws)
         ### Initialize array of M matrices
         M.array <- sapply(1:K, function(k) {
-            T.mat <- T.array[,,k]
             M.mat <- initialize.M(C)
         }, simplify = 'array')
         post.samples[[1]]$M.array <- M.array
