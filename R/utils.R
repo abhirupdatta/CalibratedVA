@@ -1,3 +1,40 @@
+#' Maps cause predictions to broader causes
+#'
+#' @param causes Either a character vector with the single predicted cause per individual,
+#' or a matrix with each row giving cause predictions for an individual. The columns
+#' of this matrix must have the original cause names
+#' @param cause_map A data frame, with a column \code{cause} giving the original cause,
+#' and a column \code{broad_cause} giving the broader cause corresponding to the 
+#' original cause
+#'
+#' @return A matrix giving individual probabilities for the broad causes
+#' @export
+map_causes <- function(causes, cause_map) {
+    ### If it's a character, assume we're using the top cause
+    broad_causes <- sort(unique(cause_map$broad_cause))
+    if(is.character(causes)) {
+        map_index <- match(causes, cause_map$cause)
+        broad_cause_map <- cause_map$broad_cause[map_index]
+        cause_mat <- matrix(0, nrow = length(causes), ncol = length(broad_causes))
+        for(i in 1:nrow(cause_mat)) {
+            cause_mat[i, which(broad_causes == broad_cause_map[i])] <- 1
+        }
+        colnames(cause_mat) <- broad_causes 
+    } else {
+        cause_mat <- causes
+        colnames(cause_mat) <- cause_map$broad_cause[match(colnames(cause_mat),
+                                                                   cause_map$cause)]
+        
+        mn <- model.matrix(~ colnames(cause_mat) + 0)
+        cause_mat <- cause_mat %*% mn
+        colnames(cause_mat) <- gsub("colnames\\(cause_mat\\)", "",
+                                            colnames(cause_mat))
+        cause_mat <- cause_mat[,broad_causes]
+        rownames(cause_mat) <- NULL
+    }
+    return(cause_mat)
+}
+
 #' @title organizes the posterior samples for the CSMF parameters from
 #' \code{calibva.sampler} into a tibble
 #' @param calibva.samples a list returned from \code{calibva.sampler}

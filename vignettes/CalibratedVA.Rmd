@@ -15,8 +15,8 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
   message = FALSE,
-  cache = TRUE,
-  eval = FALSE
+  warning = FALSE,
+  cache = TRUE
 )
 ```
 
@@ -30,7 +30,6 @@ region or country, in order to determine optimal resource allocation, we need an
 way to scale the process of determining the COD from VA data. Several algorithms have
 recently been proposed to automatically predict COD from VA records. These *computer coded* VA (CCVA) algorithms predict COD using the VA records as input. Examples include Tariff [@tariff; @tariff2], interVA [@interva], and InsilicoVA [@insilico]. These algorithms all require some gold standard (GS) information -- either a training dataset with both VA symptom data and
 a gold standard (GS) COD determined for each individual or some symptom-given-cause probability matrix.
-
 
 If we are interested in obtaining national estimates of cause specific mortality fraction (CSMF), we cantrain one of the above CCVA algorithms with GS COD data from our country of interest,
 obtain individual predictions from CCVA data for the country of interest, and then aggregate the predictions to the CSMF level. However,
@@ -46,311 +45,215 @@ CSMF estimates via local calibration.
 
 The Population Health Metrics Research Consortium (PHMRC) study contains GS COD data
 for children, neonates and adults in 4 countries, making it a perfect dataset
-to demonstrate the merits of `CalibratedVA`. In this vignette, we will use the `openVA` package to obtain PHMRC data and implement the Tariff and InSilicoVA algorithms. We will of course also have to load the `CalibratedVA` package.
+to demonstrate the merits of `CalibratedVA`. 
 
+We have used the openVA package to obtain cause-of-death predictions for adult
+deaths from Tanzania. Both InSilicoVA and Tariff were trained using deaths
+from the other 3 countries. We obtained individual cause probability predictions
+from InSilicoVA and individual top cause-of-death predictions from Tariff. We
+will also read in the GS-COD for each death from Tanzania.
 
-```{r load_pkgs}
-library(openVA)
-library(CalibratedVA)
+```{r load_phmrc}
+data("insilico_tanzania")
+data("tariff_tanzania")
+data("gs_cod_tanzania")
 ```
 
-We will now load in the PHMRC child data and use the `ConvertData.phmrc` function
-to convert the data into the appropriate structure for Tariff and InSilicoVA.
+There are `r ncol(insilico_tanzania)` causes, which is too many causes for 
+CalibratedVA to be useful. We will map these causes to broader causes, using the
+following cause map.
 
-```{r convert_data}
-child.raw <- read.csv(getPHMRC_url("child"))
-child.clean <- ConvertData.phmrc(child.raw, phmrc.type = "child")$output
+```{r load_cause_map}
+data("phmrc_adult_cause_map")
 ```
 
-To demonstrate how to implement CalibratedVA, we will first treat Tanzania as our country of interest
-for obtaining accurate CSMF estimates. We will split the PHMRC data from Tanzania into a hospital (calibration) and population (test) set, and use the rest of the PHMRC data as our gold standard (training) set. We will use a calibration set size of 100.
+To map the causes, we can provide either the probability matrix:
 
-```{r split_data}
-countries <- ifelse(child.raw$site %in% c("Dar", "Pemba"), "Tanzania", "Other")
-tanzania.data <- child.clean[countries == "Tanzania",]
-train.data <- child.clean[countries == "Other",]
-set.seed(851745)
-calibration.indices <- sample(nrow(tanzania.data), 100, replace = F)
-calibration.data <- tanzania.data[calibration.indices,]
-test.data <- tanzania.data[-calibration.indices,]
+```{r map_causes_insilicova}
+insilico_tanzania <- map_causes(insilico_tanzania, phmrc_adult_cause_map)
 ```
 
-## Implementing Tariff and InSilicoVA
+Or the character vector with the predicted cause or GS-COD for each individual
 
-In this section, we will use our training data to build prediction models using
-the Tariff and InSilicoVA algorithms. First we will implement Tariff. 
-Note that the `data` argument is the data for which we want to obtain COD
-predictions for, which is both the calibration data and our test data (we 
-will use the calibration set for CalibratedVA later in the vignette). When evaluating
-the performance of these algorithms, we will only do so on the predictions
-for the test data.
-
-```{r tariff_train}
-set.seed(123)
-tariff.train <- codeVA(data = rbind(calibration.data, test.data),
-                     data.type = "customize", model = "Tariff",
-                     data.train = train.data, causes.train = "Cause")
+```{r map_causes_insilicova}
+tariff_tanzania <- map_causes(tariff_tanzania$cause, phmrc_adult_cause_map)
+gs_cod_tanzania <- map_causes(gs_cod_tanzania, phmrc_adult_cause_map)
 ```
 
-We will now implement InSilicoVA.
+### CalibratedVA
 
-```{r insilico_train}
-set.seed(123)
-insilico.train <- codeVA(data = rbind(calibration.data, test.data),
-                         data.type = "customize", model = "InSilicoVA",
-                         data.train = train.data, causes.train = "Cause",
-                         jump.scale = 0.05, Nsim=5000, auto.length = FALSE)
+#### Single algorithm predictions
+
+We will first run CalibratedVA using the Tariff predictions. To run CalibratedVA, we will first select a set of individuals to be in our "hospital" set--that is, individuals for whom we know their GS-COD. These
+individuals will be used for estimation of algorithm misclassification rates. We will
+simply use the first 200 individuals from the data. We will use the default settings
+for all hyperparameter values.
+
+
+```{r tariff_calibratedva}
+causes <- colnames(tariff_tanzania)
+tariff_calibratedva <- calibratedva(A_U = tariff_tanzania[-(1:200),],
+                                    A_L = tariff_tanzania[1:200,],
+                                    G_L = gs_cod_tanzania[1:200,],
+                                    causes = causes)
 ```
 
-## Implementing CalibratedVA with Individual Algorithms
+We can use the `ggmcmc` package to obtain CSMF estimates for the individual causes,
+along with credible intervals.
 
-For simplicity, we will restrict ourselves to predicting the distribution for the
-top 3 COD (from Tanzania), and treat all other COD as "other". Because "Other Defined Causes of Child Deaths" is
-coded as cause 14, we will not include this cause in the Top 4. 
-
-We will extract predictions for the test and calibration set from both algorithms
-implemented above, and then change any prediction that is not in the top 3 COD 
-to other.
-
-```{r top_3_cod}
-top.cod <- names(sort(table(tanzania.data$Cause), decreasing = TRUE))
-top3.cod <- top.cod[top.cod != "14"][1:3]
-change.cause <- function(cause) {
-    cause <- as.character(cause)
-    cause[!(cause %in% top3.cod)] <- "99"
-    return(cause)
-}
-tariff.train.cod <- change.cause(getTopCOD(tariff.train)[,2])
-insilico.train.cod <- change.cause(getTopCOD(insilico.train)[,2])
-test.changedcod <- change.cause(test.data$Cause)
-calibration.changedcod <- change.cause(calibration.data$Cause)
-```
-
-Finally, we will separate out the InSilicoVA and Tariff predictions for
-the test and calibration sets.
-
-```{r separate_cod}
-tariff.train.cod.test <- tariff.train.cod[-(1:100)]
-tariff.train.cod.calib <- tariff.train.cod[1:100]
-insilico.train.cod.test <- insilico.train.cod[-(1:100)]
-insilico.train.cod.calib <- insilico.train.cod[1:100]
-```
-
-We will now initiate hyper-parameter values for CalibratedVA. These can be changed of course,
-but we have found these values work well. We will run 3  chains, obtaining 50,000 draws
-for each chains. Note that the order of the causes in the `causes` vector, 
-as this is the order in which CalibratedVA will present the distribution of
-COD estimates.
-
-```{r hyperparams}
-causes <- as.character(sort(unique(test.changedcod)))
-epsilon <- .001
-alpha <- 5
-beta <- .5
-tau <- .5
-tau.vec <- rep(tau, length(causes))
-delta <- 1
-gamma.init <- 1
-ndraws <- 50E3
-nchains <- 3
-```
-
-We will first run CalibratedVA using the Tariff predictions
-
-```{r tariff_calibva, cache = TRUE, message = FALSE}
-set.seed(123)
-calibva.seeds <- sample(1e6, nchains, replace = F)
-tariff.calibva <- calibva.sampler(test.cod = tariff.train.cod.test,
-                                  calib.cod = tariff.train.cod.calib,
-                                  calib.truth = calibration.changedcod, causes = causes,
-                                  epsilon = epsilon, alpha=alpha, beta=beta,
-                                  tau.vec=tau.vec, delta=delta,
-                                  gamma.init=gamma.init, ndraws = ndraws,
-                                  nchains = nchains,
-                                  init.seeds = calibva.seeds)
-
-```
-
-Before thinning, we may want to see what the acceptance rates are for our MH
-draws of gamma. Acceptance rates that are too high means we will want to
-choose a higher value of tau, and acceptance rates that are too low means
-we should choose a smaller value of tau.
-
-```{r gamma_acceptance_rates_tariff}
-gamma_acceptance_rates(tariff.calibva)
-```
-
-We will then use a burn-in of 10,000 for each chain and also thin the chains by a
-factor of 10
-
-```{r tariff_thin_burnin}
-tariff.calibva <- window(tariff.calibva, start = 10e3, thin = 10)
-```
-
-And now using the InSilicoVA predictions.
-
-```{r insilico_calibva, cache = TRUE, mesage = FALSE}
-insilico.calibva <- calibva.sampler(test.cod = insilico.train.cod.test,
-                                    calib.cod = insilico.train.cod.calib,
-                                    calib.truth = calibration.changedcod, causes = causes,
-                                    epsilon = epsilon, alpha=alpha, beta=beta,
-                                    tau.vec=tau.vec, delta=delta,
-                                    gamma.init=gamma.init, ndraws = ndraws,
-                                    nchains = nchains,
-                                    init.seeds = calibva.seeds)
-insilico.calibva <- window(insilico.calibva, start = 10E3, thin = 10)
-```
-
-## Obtaining CalibratedVA output
-
-The `calibva.sampler` output is a `mcmc.list` object of length `nchains`. Each element in this list is a `mcmc` object, which contains a `ndraw` x `nparam` matrix, each each row
-representing the posterior draw. We are most interested in the posterior
-draws for the CSMF parameters, which we can extract using `calibvaCSMFPosteriorSamples` function.
-This function utilizes the `ggs` function from the `ggmcmc` package. We will demonstrate
-how to obtain CalibratedVA output using the output from Tariff.
-
-```{r extract_tariff_csmf}
-library(tidyverse)
+```{r tariff_csmf}
 library(ggmcmc)
-tariff.calibva.csmf.samples <- calibvaCSMFPosteriorSamples(tariff.calibva, causes = causes)
+P <- data.frame(
+  Parameter=paste0("p[", 1:length(causes), "]"),
+  Label=causes)
+tariff_csmf_samples <- ggs(tariff_calibratedva$samples, par_labels=P, family="p")
+### CSMF with credible intervals
+tariff_csmf <-
+  tariff_csmf_samples %>%
+  group_by(Parameter) %>%
+  summarise(csmf = mean(value),
+            ci_L = quantile(value, .025),
+            ci_U = quantile(value, .975))
+tariff_csmf 
 ```
 
-We can easily make a trace plot for each of the parameters:
+We can also view the traceplot
 
-```{r tariff_trace_plot}
-ggplot(tariff.calibva.csmf.samples, aes(x = Iteration, y = value, color = factor(Chain))) +
-  geom_line() +
-  facet_wrap(~cause)
+```{r tariff_csmf_traceplot, fig.width = 8, fig.height = 12}
+ggs_traceplot(tariff_csmf_samples)
 ```
 
-We can plot the Gelman-Rubin Rhat statistics for the CSMF parameters.
+And a posterior density plot
 
-```{r tariff_gelman_rubin}
-tariff.calibva.rhat.df <- rename(tariff.calibva.csmf.samples, Parameter = cause)
-ggs_Rhat(tariff.calibva.rhat.df)
+```{r tariff_csmf_density_plot, fig.width = 8, fig.height = 12}
+ggs_density(tariff_csmf_samples)
 ```
 
-We can plot the posterior densities, along with the posterior mean
-and the uncalibrated CSMF estimate. We will use built-in helper
-functions to CalibratedVA to extract these values.
+#### Using predictions from multiple algorithms (ensemble)
 
-```{r tariff_posterior_dens}
-tariff.calibva.csmf.mean <- calibvaCSMFPosteriorSummary(tariff.calibva.csmf.samples)
-tariff.csmf.test <- getRawCSMF(tariff.train.cod.test, causes = causes)
-ggplot(tariff.calibva.csmf.samples, aes(x = value)) +
-  stat_density(geom="line", position = "identity") +
-  facet_wrap(~cause, ncol = 1, scales = "free_y") +
-  geom_vline(data = tariff.calibva.csmf.mean, aes(xintercept = mean, colour = "CalibratedVA")) +
-  geom_vline(data = tariff.csmf.test, aes(xintercept = csmf, colour = "Tariff")) +
-  scale_color_discrete(name = "Method") +
-  xlim(0, 1)
+We can use both the predictions from both InSilicoVA and Tariff to 
+better estimate the CSMF using the ensemble approach. We simply need to format
+the predictions into a list of matrices
+
+```{r format_for_ensemble}
+ensemble_unlabeled <- list(tariff_tanzania[-(1:200),], insilico_tanzania[-(1:200),])
+ensemble_labeled <- list(tariff_tanzania[1:200,], insilico_tanzania[1:200,])
 ```
 
-We can see that there is considerable uncertainty in our parameter estimates. This may
-be due to considerable uncertainty in estimating the misclassification matrix M. We can
-use built-in functions to look at the posterior mean and variances for each entry of M.
-
-```{r tariff_m_matrix}
-tariff.posterior.M <- mMatrixPosteriorSummary(tariff.calibva, causes = causes)
-tariff.posterior.M$m_posterior_mean
-tariff.posterior.M$m_posterior_var
+```{r ensemble_calibratedva}
+ensemble_calibratedva <- calibratedva(A_U = ensemble_unlabeled,
+                                      A_L = ensemble_labeled,
+                                      G_L = gs_cod_tanzania[1:200,],
+                                      causes = causes)
 ```
 
-We can see that we estimate there to be substantial misclassficiation for individuals
-with true COD 17 and 9. We can compare the posterior mean of the M matrix,
-which is shrunken towards the identity matrix, to the empirical estimate of M.
-
-```{r tariff_m_matrix_empirical}
-T.emp <-rawMisclassificationMatrix(calib.cod = insilico.train.cod.calib,
-                                   calib.truth = calibration.changedcod,
-                                   causes = causes)
-M.emp <- normalizedMisclassificationMatrix(T.emp)
-M.emp
+```{r ensemble_csmf}
+ensemble_csmf_samples <- ggs(ensemble_calibratedva$samples, par_labels=P, family="p")
+### CSMF with credible intervals
+ensemble_csmf <-
+  ensemble_csmf_samples %>%
+  group_by(Parameter) %>%
+  summarise(csmf = mean(value),
+            ci_L = quantile(value, .025),
+            ci_U = quantile(value, .975))
+ensemble_csmf 
 ```
 
-Finally, if we were only interested in point estimates of p and M, we can use
-MAP estimation, with the SQUAREM package
+We can also view the traceplot
 
-```{r tariff_map, message = FALSE}
-tariff.map <- calibva.map(test.cod = tariff.train.cod.test,
-                          calib.cod = tariff.train.cod.calib,
-                          calib.truth = calibration.changedcod, causes = causes,
-                          epsilon = epsilon, alpha=alpha, beta=beta,
-                          delta=delta)
-tariff.map$p
-tariff.map$M
+```{r ensemble_csmf_traceplot, fig.width = 8, fig.height = 12}
+ggs_traceplot(ensemble_csmf_samples)
 ```
 
-## Implementing Ensemble CalibratedVA
+And a posterior density plot
 
-The previous section clearly reveals that CalibratedVA can use the output from any CCVA algorithm. Several CCVA algorithms have been implemented in publicly available software; in any particular analysis, the optimal CCVA is unknown. For example, in the above implentation, if our population (test) set had not already been labeled with the GS COD, we would not know whether it would be best to implement CalibratedVA with Tariff or InSilicoVA. In the code below, we show how to implement the Independent CalibratedVA Independence Ensemble Model, which uses the predictions from multiple VA-based algorithms. We use output from the Tariff and InSilicoVA models built in the previous section.
-
-```{r calibva_ensemble, cache = TRUE, message = FALSE}
-test.cod.mat <- matrix(c(tariff.train.cod.test,  insilico.train.cod.test), ncol = 2)
-calib.cod.mat <- matrix(c(tariff.train.cod.calib,  insilico.train.cod.calib), ncol = 2)
-ensemble.calibva <- calibva.ensemble.lite.sampler(test.cod.mat = test.cod.mat,
-                                                  calib.cod.mat = calib.cod.mat,
-                                                  calib.truth = calibration.changedcod,
-                                                  causes = causes,
-                                                  epsilon = epsilon, alpha=alpha, beta=beta,
-                                                  tau.vec=tau.vec, delta=delta,
-                                                  gamma.init=gamma.init, ndraws = ndraws,
-                                                  nchains = nchains,
-                                                  init.seeds = calibva.seeds)
-ensemble.calibva <- window(ensemble.calibva, start = 10E3, thin = 10)
+```{r ensemble_csmf_density_plot, fig.width = 8, fig.height = 12}
+ggs_density(ensemble_csmf_samples)
 ```
 
+### More details on shrinkage
 
-## Comparing algorithm accuracy
+#### Increasing levels of shrinkage
 
-A common metric for comparing CSMF predictions is CSMF Accuracy, which is defined as 
+We can increase the alpha parameter to increase the amount of shrinkage. As an extreme 
+example, we will set alpha = 500, and show that the estimated CSMF is very similar to the
+predicted CSMF 
 
-$$
-CSMF_{acc} = 1 - \frac{\sum_{i=1}^{C} (CSMF_{i} - CSMF_{i}^{(true)})}{2(1 - \text{min}\{CSMF^{(true)}\})}
-$$
-
-where $CSMF_{i}$ and $CSMF_{i}^{(true)}$ are the estimated and true percentages, respectively, of the population for which the GS COD is cause $i$, $i=1, \ldots, C$.
-
-To obtain estimates of the CSMFs, we will use the marginal posterior means from the 
-posterior draws. We will now obtain these CSMF estimates, using the causes defined in the code 
-block where we set the CalibratedVA hyperparameter values.
-
-```{r obtain_csmf}
-tariff.calibva.csmf.samples <- calibvaCSMFPosteriorSamples(tariff.calibva, causes = causes)
-tariff.calibva.csmf.mean <- calibvaCSMFPosteriorSummary(tariff.calibva.csmf.samples)
-
-insilico.calibva.csmf.samples <- calibvaCSMFPosteriorSamples(insilico.calibva, causes = causes)
-insilico.calibva.csmf.mean <- calibvaCSMFPosteriorSummary(insilico.calibva.csmf.samples)
-
-ensemble.calibva.csmf.samples <- calibvaCSMFPosteriorSamples(ensemble.calibva, causes = causes)
-ensemble.calibva.csmf.mean <- calibvaCSMFPosteriorSummary(ensemble.calibva.csmf.samples)
-
-tariff.train.csmf <- getRawCSMF(tariff.train.cod.test, causes)
-insilico.train.csmf <- getRawCSMF(insilico.train.cod.test, causes)
+```{r tariff_calibratedva, cache = TRUE, message = FALSE}
+tariff_highshrinkage <- calibratedva(A_U = tariff_tanzania[-(1:200),],
+                                    A_L = tariff_tanzania[1:200,],
+                                    G_L = gs_cod_tanzania[1:200,],
+                                    causes = causes,
+                                    alpha = 500)
 ```
 
-Finally, we will obtain and display the CSMF accuracy for these 5 methods.
-
-```{r csmf_accuracy}
-methods <- c("tariff_calibva",
-             "insilico_calibva",
-             "ensemble_calibva",
-             "tariff_train",
-             "insilico_train")
-ptrue <- sapply(causes, function(c) mean(change.cause(tanzania.data$Cause) == c))
-csmf.acc.df <- data.frame(csmf.acc = c(getCSMF_accuracy(tariff.calibva.csmf.mean$mean, ptrue),
-                                       getCSMF_accuracy(insilico.calibva.csmf.mean$mean, ptrue),
-                                       getCSMF_accuracy(ensemble.calibva.csmf.mean$mean, ptrue),
-                                       getCSMF_accuracy(tariff.train.csmf$csmf, ptrue),
-                                       getCSMF_accuracy(insilico.train.csmf$csmf, ptrue)),
-                          method = methods)
-csmf.acc.df
+```{r tariff_highshrinkage_csmf}
+### CSMF with credible intervals
+tariff_highshrinkage_csmf <-
+  ggs(tariff_highshrinkage$samples, par_labels=P, family="p") %>%
+  group_by(Parameter) %>%
+  summarise(csmf = mean(value))
+tariff_highshrinkage_csmf
+colMeans(tariff_tanzania[-(1:200),])
 ```
 
-We see two interesting observations. First, all three CalibratedVA methods
-substantially outperform Tariff and InSilicoVA in terms of CSMF accuracy. Second,
-The CSMF accuracy of the ensemble method of CalibratedVA falls right in the middle of 
-the CSMF accuracies of Tariff and CalibratedVA. This indicates that it is a useful method
-to use, as it is always unknown whether Tariff or InSilicoVA will be the best performing algorithm.
+#### Bayesian approach using CSMF shrinkage
+
+Rather than shrinking the misclassification matrix ("M") to the identity matrix,
+we can directly shrink the CSMF ("p") to the predicted CSMF on the unlabeled data.
+This is simply done using `method = "pshrink"`. When using this method,
+the level of shrinkage is controlled by `lambda`, where higher values
+lead to more shrinkage. Setting `lambda = 1` (the default) will lead to little
+shrinkage.
+
+```{r tariff_pshrink, fig.width = 8, fig.height = 12}
+tariff_pshrink <- calibratedva(A_U = tariff_tanzania[-(1:200),],
+                               A_L = tariff_tanzania[1:200,],
+                               G_L = gs_cod_tanzania[1:200,],
+                               causes = causes,
+                               method = "pshrink",
+                               lambda = 1)
+ggs_density(ggs(tariff_pshrink$samples, par_labels=P, family="p"))
+```
+
+We can see that the above approach leads to multimodality. We can use the 
+`tune_calibratedva` function to choose a value of `lambda` which has the best WAIC,
+and for which the posterior will be unimodal and will have a low Rhat. The below
+example only uses 5 values of lambda for the gridsearch, but we recommend searching
+over a larger number of values. We will also reduce the number of draws from 10,000 (default)
+to 5,000. This is not necessarily recommended, but will reduce the run-time for 
+this example.
+
+```{r tariff_tune, fig.width = 8, fig.height = 12}
+tariff_pshrink_tuned <- tune_calibratedva(A_U = tariff_tanzania[-(1:200),],
+                                          A_L = tariff_tanzania[1:200,],
+                                          G_L = gs_cod_tanzania[1:200,],
+                                          causes = causes,
+                                          method = "pshrink",
+                                          lambda_vec  = c(.1, 1, 10, 50, 100),
+                                          ndraws = 5000)
+ggs_density(ggs(tariff_pshrink_tuned$final_model$samples, par_labels=P, family="p"))
+```
+
+We can also tune the models by collecting a list of models for different values
+of lambda (or alpha for M-shrinkage), and supplying this list to `tune_calibratedva`
+
+```{r tariff_tune}
+lambda_vec <- c(.1, 1, 10, 50, 100)
+tariff_samples_list <-lapply(lambda_vec, function(lambda) {
+  calibrateva_out <- calibratedva(A_U, A_L, G_L, causes, method = "pshrink",
+                                  lambda = lambda, ndraws = 5000)
+  return(calibrateva_out)
+})
+tariff_pshrink_tuned2 <- tune_calibratedva(A_U = tariff_tanzania[-(1:200),],
+                                           A_L = tariff_tanzania[1:200,],
+                                           G_L = gs_cod_tanzania[1:200,],
+                                           causes = causes,
+                                           method = "pshrink",
+                                           samples_list = tariff_samples_list,
+                                           lambda_vec  = c(.1, 1, 10, 50, 100))
+identical(tariff_pshrink_tuned$waic_df, tariff_pshrink_tuned2$waic_df)
+```
+
 
 ## References

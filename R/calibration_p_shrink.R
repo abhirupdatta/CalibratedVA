@@ -15,9 +15,6 @@ calibratedva_pshrink <- function(A_U, A_L = NULL, G_L = NULL, causes,
     q=apply(A_U,2,mean)                                 
     C <- length(causes)
     ### Make pseudo data
-    if(length(alpha) == 1) {
-        alpha <- rep(alpha, K)
-    }
     v <- matrix(NA, nrow = C, ncol = K)
     for(k in 1:K) {
         v[,k] <- create_v(A_U[,,k], power)

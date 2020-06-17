@@ -241,7 +241,7 @@ test_that("M-shrinkage gives good estimate of p with ensemble multi cause labels
     library(future)
     plan(multisession)
     calibratedva_out <- calibratedva(A_U, A_L, G_L, causes = as.character(1:C),
-                                     method = "mshrink", ndraws = 10000, burnin = 1000, thin = 1)
+                                     method = "mshrink", ndraws = 5000, burnin = 1000, thin = 1)
     samples <- calibratedva_out$samples
     p_samples <- do.call(rbind, lapply(1:3, function(chain) {
         samples[[chain]][,1:3]
@@ -492,7 +492,7 @@ test_that("p-shrinkage gives good estimate of p with ensemble multi cause labels
     library(future)
     plan(multisession)
     calibratedva_out <- calibratedva(A_U, A_L, G_L, causes = as.character(1:C),
-                                     method = "pshrink", ndraws = 10000, burnin = 1000, thin = 1)
+                                     method = "pshrink", ndraws = 5000, burnin = 1000, thin = 1)
     samples <- calibratedva_out$samples
     p_samples <- do.call(rbind, lapply(1:3, function(chain) {
         samples[[chain]][,1:3]
@@ -535,12 +535,12 @@ test_that("M-shrinkage cross-validation works with ensemble multi cause labels",
     }
     log10vec <- c(-3, -2, seq(-1, 2, length = 3))
     alpha_vec <- 10^log10vec
-    calibratedva_out <- cv_calibratedva(A_U, A_L, G_L, causes = as.character(1:C),
+    calibratedva_out <- tune_calibratedva(A_U, A_L, G_L, causes = as.character(1:C),
                                      method = "mshrink", alpha_vec = alpha_vec,
                                      ndraws = 500, burnin = 1, thin = 1)
     expect_equal(names(calibratedva_out),
-                 c("calibratedva_final_model", "alpha_final", "lambda_final", "waic_df"))
-    samples <- calibratedva_out$calibratedva_final_model$samples
+                 c("final_model", "alpha_final", "lambda_final", "waic_df"))
+    samples <- calibratedva_out$final_model$samples
     expect_equal(class(samples), "mcmc.list")
     waic_df <- calibratedva_out$waic_df
     expect_equal(class(waic_df), "data.frame")
@@ -582,12 +582,12 @@ test_that("p-shrinkage cross-validation works with ensemble multi cause labels",
     }
     log10vec <- c(-3, -2, seq(-1, 2, length = 3))
     lambda_vec <- 10^log10vec
-    calibratedva_out <- cv_calibratedva(A_U, A_L, G_L, causes = as.character(1:C),
+    calibratedva_out <- tune_calibratedva(A_U, A_L, G_L, causes = as.character(1:C),
                                         method = "pshrink", lambda_vec = lambda_vec,
                                         ndraws = 500, burnin = 1, thin = 1)
     expect_equal(names(calibratedva_out),
-                 c("calibratedva_final_model", "alpha_final", "lambda_final", "waic_df"))
-    samples <- calibratedva_out$calibratedva_final_model$samples
+                 c("final_model", "alpha_final", "lambda_final", "waic_df"))
+    samples <- calibratedva_out$final_model$samples
     expect_equal(class(samples), "mcmc.list")
     waic_df <- calibratedva_out$waic_df
     expect_equal(class(waic_df), "data.frame")

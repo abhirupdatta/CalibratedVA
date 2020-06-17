@@ -177,7 +177,7 @@ calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
 #'
 #' @return A list with the following components.
 #' \describe{
-#'   \item{calibratedva_final_model}{A list with output specified in
+#'   \item{final_model}{A list with output specified in
 #'   \code{\link{calibratedva}} object containing the posterior samples
 #'   for the best value of the parameter (either alpha or lambda)}
 #'   \item{alpha_final}{The chosen value of alpha for the posterior samples.
@@ -194,12 +194,13 @@ calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
 #' @importFrom LaplacesDemon Modes
 #' @importFrom ggmcmc ggs ggs_Rhat
 #' @importFrom loo waic
-cv_calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
-                            method = c("mshrink", "pshrink"),
-                            alpha_vec = NULL, lambda_vec = NULL,
-                            which.multimodal = "all",
-                            which.rhat = "all",
-                            ...) {
+tune_calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
+                              method = c("mshrink", "pshrink"),
+                              alpha_vec = NULL, lambda_vec = NULL,
+                              samples_list = NULL,
+                              which.multimodal = "all",
+                              which.rhat = "all",
+                              ...) {
     log10vec <- c(-3, -2, seq(-1, 2, length = 23))
     if(is.null(alpha_vec)) {
         alpha_vec <- 10^log10vec
@@ -207,19 +208,22 @@ cv_calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
     if(is.null(lambda_vec)) {
         lambda_vec=10^(log10vec)
     }
-    if(method == "mshrink") {
-        samples_list <- lapply(alpha_vec, function(alpha) {
-            calibrateva_out <- calibratedva(A_U, A_L, G_L, causes, method = "mshrink",
-                                    alpha = alpha, ...)
-            return(calibrateva_out)
-        })
-    } else {
-        samples_list <- lapply(lambda_vec, function(lambda) {
-            calibrateva_out <- calibratedva(A_U, A_L, G_L, causes, method = "pshrink",
-                                            lambda = lambda, ...)
-            return(calibrateva_out)
-        })
+    if(is.null(samples_list)) {
+        if(method == "mshrink") {
+            samples_list <- lapply(alpha_vec, function(alpha) {
+                calibrateva_out <- calibratedva(A_U, A_L, G_L, causes, method = "mshrink",
+                                                alpha = alpha, ...)
+                return(calibrateva_out)
+            })
+        } else {
+            samples_list <- lapply(lambda_vec, function(lambda) {
+                calibrateva_out <- calibratedva(A_U, A_L, G_L, causes, method = "pshrink",
+                                                lambda = lambda, ...)
+                return(calibrateva_out)
+            })
+        } 
     }
+    
     ### now check whether we're using ensemble or not
     is_ensemble <- is.list(A_U)
     K <- ifelse(is_ensemble, length(A_U), 1)
@@ -273,13 +277,13 @@ cv_calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
         my_param <- pick_param(waic_df, param_vec = lambda_vec)
     }
     
-    alpha_final <- ifelse(method == "mshrink", my_param, NULL)
+    alpha_final <- switch(method == "mshrink", my_param, NULL)
     lambda_final <- switch(method == "pshrink", my_param, NULL)
     param_index <- ifelse(method == "mshrink",
                           which(alpha_vec == my_param),
                           which(lambda_vec == my_param))
     final_samples <- samples_list[[param_index]]
-    return(list(calibratedva_final_model = final_samples,
+    return(list(final_model = final_samples,
                 alpha_final = alpha_final, lambda_final = lambda_final,
                 waic_df = waic_df))
 }
