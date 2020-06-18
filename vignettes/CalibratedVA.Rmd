@@ -255,5 +255,4 @@ tariff_pshrink_tuned2 <- tune_calibratedva(A_U = tariff_tanzania[-(1:200),],
 identical(tariff_pshrink_tuned$waic_df, tariff_pshrink_tuned2$waic_df)
 ```
 
-
 ## References
