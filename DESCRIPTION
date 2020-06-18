@@ -2,10 +2,19 @@ Package: CalibratedVA
 Type: Package
 Title: CalibratedVA
 Version: 0.0.0.9001
-Authors@R: as.person(c(
-    "Jacob Fiksel <jfiksel@gmail.com> [aut, cre]", 
-    "Abhirup Datta <abhidatta@jhu.edu> [aut]"
-  ))
+Authors@R: c(person(given = "Jacob",
+           family = "Fiksel",
+           role = c("aut", "cre"),
+           email = "jfiksel@gmail.com",
+           comment = c(ORCID = "0000-0001-7067-1334")),
+           person(given = "Abhirup",
+           family = "Datta",
+           role = c("aut"),
+           email = "abhidatta@jhu.edu"),
+           person(given = "Brian",
+           family = "Gilbert",
+           role = c("ctb"),
+           email = "bgilber9@jhmi.edu"))
 Description: Uses Gibbs sampling to estimate the true underlying distribution
     of cause of disease when you have access to a calibration set and an
     imperfect training set
@@ -14,9 +23,13 @@ Imports:
     ggmcmc,
     gtools,
     coda,
-    LaplacesDemon,
+    LaplacesDemon (>= 16.1.4),
     loo,
-    future.apply
+    future.apply,
+    rstan,
+    purrr
+Remotes:
+    LaplacesDemonR/LaplacesDemon
 License: GPL-3
 Encoding: UTF-8
 LazyData: true

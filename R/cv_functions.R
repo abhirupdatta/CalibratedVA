@@ -26,23 +26,25 @@ is_multimodal <- function(calibration, C, K = NA, cutoff = .05, params = "all") 
     return(multimodal)
 }
 
-max_r_hat <- function(calibration) {
-    param_df <- ggs(calibration) %>% filter(!grepl("gamma", Parameter))
-    rhats <- ggs_Rhat(param_df)$data$Rhat
-    rhats[is.na(rhats)] <- 1
+max_r_hat <- function(calibration, C, K = NA, params = "all") {
+    if(params == "all") {
+        param_vec <- 1:(C + K * C^2)
+    }
+    if(params == "p") {
+        param_vec <- 1:C
+    }
+    nchains <- length(calibration)
+    ndraws <- nrow(calibration[[1]])
+    rhats <- sapply(param_vec, function(i) {
+        param_mat <- matrix(NA, nrow = ndraws, ncol = nchains)
+        for(chain in 1:nchains) {
+            param_mat[,chain] <- calibration[[chain]][,i]
+        } 
+        return(rstan::Rhat(param_mat))
+    })
     rhat_max <- max(rhats)
     return(rhat_max)
 }
-
-max_r_hat_p <- function(calibration) {
-    param_df <- ggs(calibration, family = "p") 
-    rhats <- ggs_Rhat(param_df)$data$Rhat
-    rhats[is.na(rhats)] <- 1
-    rhat_max <- max(rhats)
-    return(rhat_max)
-}
-
-
 
 pick_param <- function(waic_df, param_vec) {
     for(i in 1:length(param_vec)) {
@@ -181,7 +183,7 @@ uncalib_log_lik <- function(post_samples, A_U, A_L, G_L, delta = 1, eps = .001) 
 }
 
 
-uncalib_ensemble_log_lik <- function(post_samples, A_U, A_L, G_L, delta = 1, eps = .001) {
+uncalib_ensemble_log_lik <- function(post_samples, A_U, A_L, G_L, delta = 1, sens = .95) {
     C <- dim(A_U)[2]
     N <- dim(A_U)[1]
     n <- dim(A_L)[1]
@@ -193,7 +195,12 @@ uncalib_ensemble_log_lik <- function(post_samples, A_U, A_L, G_L, delta = 1, eps
         #p_samples <- chain_samples[,grepl("p", param_names)]
         #M_samples <- chain_samples[,grepl("M", param_names)]
         p_samples <- rdirichlet(S, v + delta)
-        M_mat <- (1-eps) * diag(1, C) + eps / C
+        M_mat <- matrix(NA, nrow = C, ncol = C)
+        for(i in 1:C) {
+            for(j in 1:C) {
+                M_mat[i,j] <- ifelse(i==j, sens, (1-sens)/(C-1))
+            }
+        } 
         N <- nrow(A_U)
         n <- nrow(A_L)
         log_lik_chain <- matrix(0, nrow = nrow(chain_samples), ncol = N + n)
@@ -209,6 +216,9 @@ uncalib_ensemble_log_lik <- function(post_samples, A_U, A_L, G_L, delta = 1, eps
     log_lik_mat <- do.call(rbind, log_lik_list)
     return(log_lik_mat)
 }
+
+quietly_get_waic <- function(...) "dummy"
+quietly_get_waic_uncalib <- function(...) "dummy"
 
 get_waic <- function(calibration, A_U, A_L, G_L, method = c("single_alg", "ensemble")[1]) {
     if(method == "single_alg") {
@@ -227,4 +237,27 @@ get_waic <- function(calibration, A_U, A_L, G_L, method = c("single_alg", "ensem
     return(waic_calib)
 }
 
+
+get_waic_uncalib <- function(calibration, A_U, A_L, G_L, method = c("single_alg", "ensemble")[1]) {
+    if(method == "single_alg") {
+        log_lik_mat_calib <- uncalib_log_lik(calibration,
+                                             A_U = A_U,
+                                             A_L = A_L,
+                                             G_L = G_L)  
+    }
+    if(method == "ensemble"){
+        log_lik_mat_calib <- uncalib_ensemble_log_lik(calibration,
+                                                      A_U = A_U,
+                                                      A_L = A_L,
+                                                      G_L = G_L) 
+    }
+    waic_uncalib <- waic(log_lik_mat_calib)$estimates[3,1] 
+    return(waic_uncalib)
+}
+
+
+.onLoad <- function(lib, pkg) {
+    quietly_get_waic  <<- purrr::quietly(get_waic)
+    quietly_get_waic_uncalib  <<- purrr::quietly(get_waic_uncalib)
+}
 

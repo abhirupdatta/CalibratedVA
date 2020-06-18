@@ -1,6 +1,6 @@
 ---
-title: "CalibratedVA"
-author: "Jacob Fiksel and Abhirup Datta"
+title: "Overview of CalibratedVA"
+author: "Jacob Fiksel"
 date: "`r Sys.Date()`"
 output: pdf_document
 bibliography: bibliography.bib
@@ -22,8 +22,7 @@ knitr::opts_chunk$set(
 
 ## Introduction
 
-Many countries cannot conduct full autopsies for the majority of deaths due to either cultural or economic limitations [@abouzahr2015civil; @allotey2015let]. Rather than perform an invasive autopsy, an alternative method to determine the cause (or "etiology") of death (COD) is to conduct a *verbal autopsy* (VA), where relatives of the deceased individual are asked a set list of questions to obtain information about symptoms experienced by the deceased observed prior to death [@soleman2006verbal]. Medical experts can then
-use these VA responses to determine the COD for an individual.
+Many countries cannot conduct full autopsies for the majority of deaths due to either cultural or economic limitations [@abouzahr2015civil; @allotey2015let]. Rather than perform an invasive autopsy, an alternative method to determine the cause (or "etiology") of death (COD) is to conduct a *verbal autopsy* (VA), where relatives of the deceased individual are asked a set list of questions to obtain information about symptoms experienced by the deceased observed prior to death [@soleman2006verbal]. Medical experts can then use these VA responses to determine the COD for an individual.
 
 If we are interested in obtaining causes of death for a large amount of individuals in a
 region or country, in order to determine optimal resource allocation, we need an efficient
@@ -235,8 +234,20 @@ tariff_pshrink_tuned <- tune_calibratedva(A_U = tariff_tanzania[-(1:200),],
 ggs_density(ggs(tariff_pshrink_tuned$final_model$samples, par_labels=P, family="p"))
 ```
 
+We can also compare the WAIC of the chosen model to the WAIC of the uncalibrated model,
+as well as to the WAIC values for all values of the parameter we performed the
+grid search over:
+
+```{r waic_compare}
+tariff_pshrink_tuned$waic_final
+tariff_pshrink_tuned$waic_uncalib
+tariff_pshrink_tuned$waic_df
+```
+
 We can also tune the models by collecting a list of models for different values
-of lambda (or alpha for M-shrinkage), and supplying this list to `tune_calibratedva`
+of lambda (or alpha for M-shrinkage), and supplying this list to `tune_calibratedva`.
+This is especially useful if we want to use parallelization to run the Gibbs sampling
+for the grid search, and then obtain the best model.
 
 ```{r tariff_tune}
 lambda_vec <- c(.1, 1, 10, 50, 100)

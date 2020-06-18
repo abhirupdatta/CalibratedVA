@@ -12,6 +12,7 @@ tune_calibratedva(
   method = c("mshrink", "pshrink"),
   alpha_vec = NULL,
   lambda_vec = NULL,
+  samples_list = NULL,
   which.multimodal = "all",
   which.rhat = "all",
   ...
@@ -56,6 +57,10 @@ A list with the following components.
   Null if using p-shrinkage.}
   \item{lambda_final}{The chosen value of lambda for the posterior samples.
   Null if using M-shrinkage.}
+  \item{waic_final}{The WAIC for the posterior samples, using the chosen
+  value of alpha or lambda}
+  \item{waic_uncalib}{The WAIC corresponding the uncalibrated model where we
+  assume that each COD has a sensitivity of .95}
   \item{waic_df}{A data frame containing a row for each parameter evaluated,
   which gives the WAIC, whether or not the posteriors were multimodal, and the
   Rhat of the posterior samples.}

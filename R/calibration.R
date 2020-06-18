@@ -184,6 +184,10 @@ calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
 #'   Null if using p-shrinkage.}
 #'   \item{lambda_final}{The chosen value of lambda for the posterior samples.
 #'   Null if using M-shrinkage.}
+#'   \item{waic_final}{The WAIC for the posterior samples, using the chosen
+#'   value of alpha or lambda}
+#'   \item{waic_uncalib}{The WAIC corresponding the uncalibrated model where we
+#'   assume that each COD has a sensitivity of .95}
 #'   \item{waic_df}{A data frame containing a row for each parameter evaluated,
 #'   which gives the WAIC, whether or not the posteriors were multimodal, and the
 #'   Rhat of the posterior samples.}
@@ -194,6 +198,7 @@ calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
 #' @importFrom LaplacesDemon Modes
 #' @importFrom ggmcmc ggs ggs_Rhat
 #' @importFrom loo waic
+#' @importFrom purrr quietly
 tune_calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
                               method = c("mshrink", "pshrink"),
                               alpha_vec = NULL, lambda_vec = NULL,
@@ -247,21 +252,21 @@ tune_calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
                              is_multimodal(calibration, C = C, K = K),
                              is_multimodal(calibration, C = C, params = "p"))
         if(is_ensemble) {
-            waic <- get_waic(calibration,
+            waic <- quietly_get_waic(calibration,
                              A_U = A_U,
                              A_L = A_L,
                              G_L = G_L,
-                             method = "ensemble") 
+                             method = "ensemble")$result
         } else {
-            waic <- get_waic(calibration,
-                             A_U = A_U,
-                             A_L = A_L,
-                             G_L = G_L,
-                             method = "single_alg")
+            waic <- quietly_get_waic(calibration,
+                                     A_U = A_U,
+                                     A_L = A_L,
+                                     G_L = G_L,
+                                     method = "single_alg")$result
         }
         rhat_max <- ifelse(which.rhat == "all",
-                           max_r_hat(calibration),
-                           max_r_hat_p(calibration))
+                           max_r_hat(calibration, C = C, K = K),
+                           max_r_hat(calibration, C = C, K = K, params = "p"))
         param <- ifelse(method == "mshrink", alpha_vec[i], lambda_vec[i])
         df <- data.frame(param = param, 
                          waic_calib = waic,
@@ -282,8 +287,27 @@ tune_calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
     param_index <- ifelse(method == "mshrink",
                           which(alpha_vec == my_param),
                           which(lambda_vec == my_param))
+    df_index <- which(waic_df$param == my_param)
+    waic_final <- waic_df$waic_calib[df_index]
     final_samples <- samples_list[[param_index]]
+    ### Finally, get uncalibrated WAIC
+    if(is_ensemble) {
+        waic_uncalib <- quietly_get_waic_uncalib(final_samples$samples,
+                                                 A_U = A_U,
+                                                 A_L = A_L,
+                                                 G_L = G_L,
+                                                 method = "ensemble")$result
+    } else {
+        waic_uncalib <- quietly_get_waic_uncalib(final_samples$samples,
+                                                 A_U = A_U,
+                                                 A_L = A_L,
+                                                 G_L = G_L,
+                                                 method = "single_alg")$result
+    }
     return(list(final_model = final_samples,
-                alpha_final = alpha_final, lambda_final = lambda_final,
+                alpha_final = alpha_final,
+                lambda_final = lambda_final,
+                waic_final = waic_final,
+                waic_uncalib = waic_uncalib,
                 waic_df = waic_df))
 }
