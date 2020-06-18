@@ -15,8 +15,7 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
   message = FALSE,
-  warning = FALSE,
-  cache = TRUE
+  warning = FALSE
 )
 ```
 
@@ -53,6 +52,7 @@ from InSilicoVA and individual top cause-of-death predictions from Tariff. We
 will also read in the GS-COD for each death from Tanzania.
 
 ```{r load_phmrc}
+library(CalibratedVA)
 data("insilico_tanzania")
 data("tariff_tanzania")
 data("gs_cod_tanzania")
@@ -79,9 +79,9 @@ tariff_tanzania <- map_causes(tariff_tanzania$cause, phmrc_adult_cause_map)
 gs_cod_tanzania <- map_causes(gs_cod_tanzania, phmrc_adult_cause_map)
 ```
 
-### CalibratedVA
+## CalibratedVA
 
-#### Single algorithm predictions
+### Single algorithm predictions
 
 We will first run CalibratedVA using the Tariff predictions. To run CalibratedVA, we will first select a set of individuals to be in our "hospital" set--that is, individuals for whom we know their GS-COD. These
 individuals will be used for estimation of algorithm misclassification rates. We will
@@ -128,7 +128,7 @@ And a posterior density plot
 ggs_density(tariff_csmf_samples)
 ```
 
-#### Using predictions from multiple algorithms (ensemble)
+### Using predictions from multiple algorithms (ensemble)
 
 We can use both the predictions from both InSilicoVA and Tariff to 
 better estimate the CSMF using the ensemble approach. We simply need to format
@@ -170,15 +170,15 @@ And a posterior density plot
 ggs_density(ensemble_csmf_samples)
 ```
 
-### More details on shrinkage
+## More details on shrinkage
 
-#### Increasing levels of shrinkage
+### Increasing levels of shrinkage
 
 We can increase the alpha parameter to increase the amount of shrinkage. As an extreme 
 example, we will set alpha = 500, and show that the estimated CSMF is very similar to the
 predicted CSMF 
 
-```{r tariff_calibratedva, cache = TRUE, message = FALSE}
+```{r tariff_highshrinkage, cache = TRUE, message = FALSE}
 tariff_highshrinkage <- calibratedva(A_U = tariff_tanzania[-(1:200),],
                                     A_L = tariff_tanzania[1:200,],
                                     G_L = gs_cod_tanzania[1:200,],
@@ -196,7 +196,7 @@ tariff_highshrinkage_csmf
 colMeans(tariff_tanzania[-(1:200),])
 ```
 
-#### Bayesian approach using CSMF shrinkage
+### Bayesian approach using CSMF shrinkage
 
 Rather than shrinking the misclassification matrix ("M") to the identity matrix,
 we can directly shrink the CSMF ("p") to the predicted CSMF on the unlabeled data.
@@ -249,10 +249,13 @@ of lambda (or alpha for M-shrinkage), and supplying this list to `tune_calibrate
 This is especially useful if we want to use parallelization to run the Gibbs sampling
 for the grid search, and then obtain the best model.
 
-```{r tariff_tune}
+```{r tariff_tune_lapply}
 lambda_vec <- c(.1, 1, 10, 50, 100)
 tariff_samples_list <-lapply(lambda_vec, function(lambda) {
-  calibrateva_out <- calibratedva(A_U, A_L, G_L, causes, method = "pshrink",
+  calibrateva_out <- calibratedva(A_U = tariff_tanzania[-(1:200),],
+                                  A_L = tariff_tanzania[1:200,],
+                                  G_L = gs_cod_tanzania[1:200,],
+                                  causes = causes, method = "pshrink",
                                   lambda = lambda, ndraws = 5000)
   return(calibrateva_out)
 })

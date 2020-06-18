@@ -25,7 +25,9 @@ You can then install the development version of CalibratedVA from
 remotes::install_github("jfiksel/CalibratedVA")
 ```
 
-### Getting started with CalibratedVA
+## Getting started with CalibratedVA
+
+### PHMRC Data
 
 The Population Health Metrics Research Consortium (PHMRC) study contains
 GS COD data for children, neonates and adults in 4 countries, making it
@@ -71,9 +73,7 @@ tariff_tanzania <- map_causes(tariff_tanzania$cause, phmrc_adult_cause_map)
 gs_cod_tanzania <- map_causes(gs_cod_tanzania, phmrc_adult_cause_map)
 ```
 
-### CalibratedVA
-
-#### Single algorithm predictions
+### Single algorithm predictions
 
 We will first run CalibratedVA using the Tariff predictions. To run
 CalibratedVA, we will first select a set of individuals to be in our
@@ -152,7 +152,7 @@ ggs_density(tariff_csmf_samples)
 
 <img src="man/figures/README-tariff_csmf_density_plot-1.png" width="100%" />
 
-#### Using predictions from multiple algorithms (ensemble)
+### Using predictions from multiple algorithms (ensemble)
 
 We can use both the predictions from both InSilicoVA and Tariff to
 better estimate the CSMF using the ensemble approach. We simply need to
@@ -209,3 +209,8 @@ ggs_density(ensemble_csmf_samples)
 ```
 
 <img src="man/figures/README-ensemble_csmf_density_plot-1.png" width="100%" />
+
+### Additional features
+
+Please view the “Get Started” tab to see additional features in
+CalibratedVA.

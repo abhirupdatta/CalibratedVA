@@ -232,9 +232,9 @@ tune_calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
     ### now check whether we're using ensemble or not
     is_ensemble <- is.list(A_U)
     K <- ifelse(is_ensemble, length(A_U), 1)
+    C <- length(causes)
     ### Format A_U and A_L into arrays (only if they are in list format i.e. ensemble)
     if(is_ensemble) {
-        C <- length(causes)
         N_U <-  nrow(A_U[[1]])
         N_L <-  nrow(A_L[[1]])
         A_U_array <- array(NA, dim = c(N_U, C, K))
