@@ -11,6 +11,8 @@ calibratedva_pshrink <- function(A_U, A_L = NULL, G_L = NULL, causes,
         A_U <- matrix_to_array(A_U)
         A_L <- matrix_to_array(A_L)
         K <- 1
+    } else {
+        K <- dim(A_U)[3]
     }
     q=apply(A_U,2,mean)                                 
     C <- length(causes)

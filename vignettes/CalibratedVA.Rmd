@@ -74,7 +74,7 @@ insilico_tanzania <- map_causes(insilico_tanzania, phmrc_adult_cause_map)
 
 Or the character vector with the predicted cause or GS-COD for each individual
 
-```{r map_causes_insilicova}
+```{r map_causes_tariff}
 tariff_tanzania <- map_causes(tariff_tanzania$cause, phmrc_adult_cause_map)
 gs_cod_tanzania <- map_causes(gs_cod_tanzania, phmrc_adult_cause_map)
 ```

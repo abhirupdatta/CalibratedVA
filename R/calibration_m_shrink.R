@@ -13,6 +13,8 @@ calibratedva_mshrink <- function(A_U, A_L = NULL, G_L = NULL, causes, ndraws = 1
         A_U <- matrix_to_array(A_U)
         A_L <- matrix_to_array(A_L)
         K <- 1
+    } else {
+        K <- dim(A_U)[3]
     }
     C <- length(causes)
     tau.vec <- rep(tau, C)
