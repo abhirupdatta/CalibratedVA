@@ -42,6 +42,7 @@ max_r_hat <- function(calibration, C, K = NA, params = "all") {
         } 
         return(rstan::Rhat(param_mat))
     })
+    rhats[is.na(rhats)] <- 1
     rhat_max <- max(rhats)
     return(rhat_max)
 }

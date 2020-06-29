@@ -138,12 +138,15 @@ calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
                                         alpha = alpha, beta = beta,
                                         delta = delta,
                                         epsilon = epsilon,
-                                        tau = tau)
+                                        tau = tau,
+                                        init.seed = init.seed)
     } else {
         samples <- calibratedva_pshrink(A_U = A_U, A_L = A_L, G_L = G_L,
                                         causes = causes, nchains = nchains,
-                                        power = power, ndraws = ndraws, burnin = burnin, thin = thin,
-                                        lambda = lambda, epsilon = epsilon)
+                                        power = power, ndraws = ndraws, burnin = burnin,
+                                        thin = thin,
+                                        lambda = lambda, epsilon = epsilon,
+                                        init.seed = init.seed)
     }
     ### output will be a list
     ### return the list of posterior samples, the inputs, and the settings used
@@ -206,6 +209,7 @@ tune_calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
                               which.multimodal = "all",
                               which.rhat = "all",
                               ...) {
+    set.seed(123)
     log10vec <- c(-3, -2, seq(-1, 2, length = 23))
     if(is.null(alpha_vec)) {
         alpha_vec <- 10^log10vec

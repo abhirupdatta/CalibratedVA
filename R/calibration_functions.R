@@ -17,9 +17,9 @@ create_v <- function(A_U, power) {
     ### Does rounding for pseudo data
     A_U_dim <- dim(A_U)
     C <- A_U_dim[2]
-    A_U_round <- t(apply(A_U, 1, function(x) round_preserve_sum(x, 2)))
     mult_factor <- round(1 / power)
-    A_U_int <- A_U_round * mult_factor
+    A_U_mult <- A_U * mult_factor
+    A_U_int <- t(apply(A_U_mult, 1, function(x) round_preserve_sum(x, digits = 0)))
     d_U <- matrix(NA, nrow = nrow(A_U), ncol = mult_factor)
     for(i in 1:nrow(d_U)){
         rep_factor <- as.integer(A_U_int[i,])
@@ -34,9 +34,9 @@ create_v <- function(A_U, power) {
 create_T <- function(A_L, G_L, C, power) {
     ### Single algorithm
     ### Can be extended to ensemble
-    A_L <- t(apply(A_L, 1, function(x) round_preserve_sum(x, 2)))
     mult_factor <- round(1 / power)
-    A_L_int <- A_L * mult_factor
+    A_L_mult <- A_L * mult_factor
+    A_L_int <- t(apply(A_L_mult, 1, function(x) round_preserve_sum(x, digits = 0)))
     d_L <- matrix(NA, nrow = nrow(A_L), ncol = mult_factor)
     for(i in 1:nrow(d_L)){
         rep_factor <- as.integer(A_L_int[i,])
@@ -46,8 +46,8 @@ create_T <- function(A_L, G_L, C, power) {
     }
     
     ### Make pseudo latent variables for labeled set
-    G_L <- t(apply(G_L, 1, function(x) round_preserve_sum(x, 2)))
-    G_L_int <- G_L * mult_factor
+    G_L_mult <- G_L * mult_factor
+    G_L_int <- t(apply(G_L_mult, 1, function(x) round_preserve_sum(x, digits = 0)))
     z_L <- matrix(NA, nrow = nrow(G_L), ncol = mult_factor)
     for(i in 1:nrow(z_L)){
         rep_factor <- as.integer(G_L_int[i,])
@@ -65,17 +65,17 @@ create_T <- function(A_L, G_L, C, power) {
 }
 
 create_labeled_pseudodata <- function(A_L, C, power) {
-    A_L <- t(apply(A_L, 1, function(x) round_preserve_sum(x, 2)))
     mult_factor <- round(1 / power)
-    A_L_int <- A_L * mult_factor
-    d_L <- matrix(NA, nrow = nrow(A_L), ncol = mult_factor)
-    for(i in 1:nrow(d_L)){
-        rep_factor <- as.integer(A_L_int[i,])
-        rep_factor[rep_factor < 0] <- 0
-        rep_factor[C] <- mult_factor - sum(rep_factor[1:(C-1)])
-        d_L[i,] <- rep(1:C, rep_factor)
-        A_L_int[i,] <- sapply(1:C, function(c) sum(d_L[i,]==c))
-    }
+    A_L_mult <- A_L * mult_factor
+    A_L_int <- t(apply(A_L_mult, 1, function(x) round_preserve_sum(x, digits = 0)))
+    # d_L <- matrix(NA, nrow = nrow(A_L), ncol = mult_factor)
+    # for(i in 1:nrow(d_L)){
+    #     rep_factor <- as.integer(A_L_int[i,])
+    #     rep_factor[rep_factor < 0] <- 0
+    #     rep_factor[C] <- mult_factor - sum(rep_factor[1:(C-1)])
+    #     d_L[i,] <- rep(1:C, rep_factor)
+    #     A_L_int[i,] <- sapply(1:C, function(c) sum(d_L[i,]==c))
+    # }
     return(A_L_int)
 }
 
