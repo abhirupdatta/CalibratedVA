@@ -5,7 +5,7 @@ calibratedva_mshrink <- function(A_U, A_L = NULL, G_L = NULL, causes, ndraws = 1
                                  delta = 1,
                                  epsilon = .001,
                                  tau = .5, max.gamma = 1E3,
-                                 print.chains = FALSE,
+                                 print.chains = TRUE,
                                  nchains = 3,
                                  init.seed = 123) {
     ### If A_U is a matrix (dimension 2), change to array
@@ -54,6 +54,7 @@ calibratedva_mshrink <- function(A_U, A_L = NULL, G_L = NULL, causes, ndraws = 1
             T.array.sc <- array(0, dim=c(C,C,K))
         }
     }
+    iter_pct <- round(ndraws * .1)
     posterior.list <- future_lapply(1:nchains, function(chain){
         #seed <- init.seeds[chain]
         #set.seed(seed)
@@ -133,7 +134,9 @@ calibratedva_mshrink <- function(A_U, A_L = NULL, G_L = NULL, causes, ndraws = 1
                                                                 epsilon, alpha[k], beta, M.mat,
                                                                 tau.vec, max.gamma) 
             }
-            if((i%%10000)==0 & print.chains) message(paste("Chain", chain, "Draw", i))
+            my_pct <- round(i / ndraws, 1) * 100
+            my_message <- paste("Chain", chain, "Draw", i, "/", ndraws, paste0("[", my_pct, "%]\n"))
+            if((i%%iter_pct)==0 & print.chains) cat(my_message)
         }
         ### Put everything into a matrix, to be converted into an mcmc object
         ### Number of params is K * C ^ 2 (M matrix for each algorithm)
@@ -165,7 +168,7 @@ calibratedva_mshrink <- function(A_U, A_L = NULL, G_L = NULL, causes, ndraws = 1
         cnames <- c(p.names, M.names, gamma.names)
         colnames(post.samples.mat) <- cnames
         return(mcmc(post.samples.mat))
-    }, future.seed = init.seed)
+    }, future.seed = init.seed, future.stdout = NA)
     post.samples.list  <- mcmc.list(posterior.list)
     post.samples.list <- window(post.samples.list, start = burnin, thin = thin)
     return(post.samples.list)

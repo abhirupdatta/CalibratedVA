@@ -5,9 +5,9 @@
 \title{Chooses parameter values for calibration using WAIC}
 \usage{
 tune_calibratedva(
-  A_U,
-  A_L = NULL,
-  G_L = NULL,
+  va_unlabeled,
+  va_labeled = NULL,
+  gold_standard = NULL,
   causes,
   method = c("mshrink", "pshrink"),
   alpha_vec = NULL,
@@ -19,13 +19,13 @@ tune_calibratedva(
 )
 }
 \arguments{
-\item{A_U}{A matrix or list of causes for individuals without labeled
+\item{va_unlabeled}{A matrix or list of causes for individuals without labeled
 causes of death. See \code{\link{calibratedva}}.}
 
-\item{A_L}{A matrix or list of causes for individuals with labeled
+\item{va_labeled}{A matrix or list of causes for individuals with labeled
 causes of death. See \code{\link{calibratedva}}.}
 
-\item{G_L}{A matrix where each row represents either the true cause for an individual
+\item{gold_standard}{A matrix where each row represents either the true cause for an individual
 with a labeled cause of death. See \code{\link{calibratedva}}.}
 
 \item{causes}{A character vector with the names of the causes. These should correspond to
@@ -57,10 +57,6 @@ A list with the following components.
   Null if using p-shrinkage.}
   \item{lambda_final}{The chosen value of lambda for the posterior samples.
   Null if using M-shrinkage.}
-  \item{waic_final}{The WAIC for the posterior samples, using the chosen
-  value of alpha or lambda}
-  \item{waic_uncalib}{The WAIC corresponding the uncalibrated model where we
-  assume that each COD has a sensitivity of .95}
   \item{waic_df}{A data frame containing a row for each parameter evaluated,
   which gives the WAIC, whether or not the posteriors were multimodal, and the
   Rhat of the posterior samples.}

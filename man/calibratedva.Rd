@@ -5,9 +5,9 @@
 \title{Performs Gibbs sampling for calibration}
 \usage{
 calibratedva(
-  A_U,
-  A_L = NULL,
-  G_L = NULL,
+  va_unlabeled,
+  va_labeled = NULL,
+  gold_standard = NULL,
   causes,
   method = c("mshrink", "pshrink"),
   nchains = 3,
@@ -21,11 +21,14 @@ calibratedva(
   delta = 1,
   epsilon = 0.001,
   tau = 0.5,
+  which.multimodal = "all",
+  which.rhat = "all",
+  print.chains = FALSE,
   init.seed = 123
 )
 }
 \arguments{
-\item{A_U}{When using cause of death predictions from a single algorithm, this
+\item{va_unlabeled}{When using cause of death predictions from a single algorithm, this
 will be a matrix, where each row gives the predicted cause of death probabilities for
 an individual death, for individuals without cause of death labels. Each column represents
 a cause. If using the top cause, one entry in each row should be 1, while the rest should be 0.
@@ -33,12 +36,12 @@ When using predictions from multiple algorithms for the ensemble approach, this 
 be a list of matrices with algorithm predictions for the same individuals, where each
 entry in the list are predictions from a given algorithm. See examples for more information}
 
-\item{A_L}{A matrix or list in the same format as A_U, but for individuals with labeled
+\item{va_labeled}{A matrix or list in the same format as va_unlabeled, but for individuals with labeled
 causes of death. If there are no individuals with labeled causes, leave as NULL}
 
-\item{G_L}{A matrix where each row represents either the true cause for an individual
+\item{gold_standard}{A matrix where each row represents either the true cause for an individual
 with a labeled cause of death (i.e. if the label for individual i is cause j, then
-G_L[i,j] will be 1, and the other entries of that row will be 0), or the probabilities
+gold_standard[i,j] will be 1, and the other entries of that row will be 0), or the probabilities
 that each individual died of a certain cause. The rows of \code{G_L} should correspond
 to the rows of \code{A_L} (or the rows of each element of \code{A_L} if it is a list)}
 
@@ -72,7 +75,16 @@ M-shrinkage sampling.}
 
 \item{epsilon}{A numeric value for the epsilon in the prior of M. Default is .001.}
 
-\item{init.seed}{The initial seed for L’Ecuyer-CMRG RNG stream generation. Default is 123.}
+\item{which.multimodal}{A character specifying whether both p and M (which.multimodal = "all")
+should be evaluated for multimodality, or just p (which.multimodal = "p")}
+
+\item{which.rhat}{A character specifying whether both p and M (which.rhat = "all")
+should be evaluated for convergence, or just p (which.rhat = "p")}
+
+\item{print.chains}{A logical scalar which says whether or not you want the 
+progress of the sampling printed to the screen. Default is FALSE}
+
+\item{init.seed}{The initial seed for sampling. Default is 123.}
 
 \item{tau.vec}{A numeric vector for the log standard deviation for the sampling distributions
 of the gammas. Only used for M-shrinkage sampling.}
@@ -82,9 +94,19 @@ A list with the following components.
 \describe{
   \item{samples}{A \code{\link[coda]{mcmc.list}} object containing the posterior samples
   for p, M, and gamma (if using M-shrinkage)}
-  \item{A_U}{The value of \code{A_U} using for the posterior samples}
-  \item{A_L}{The value of \code{A_L} using for the posterior samples}
-  \item{G_L}{The value of \code{G_L} using for the posterior samples}
+  \item{A_U}{The value of \code{va_unlabeled} using for the posterior samples}
+  \item{A_L}{The value of \code{va_labeled} using for the posterior samples}
+  \item{G_L}{The value of \code{gold_standard} using for the posterior samples}
+  \item{method}{The method used for shrinkage (either mshrink or pshrink)}
+  \item{waic}{The estimated WAIC for the calibrated posterior}
+  \item{waic_uncalib}{The estimated WAIC for the uncalibrated posterior}
+  \item{multimodal}{Either TRUE or FALSE, indicating whether or not the posterior
+  samples for p (and potentially M) are multimodal}
+  \item{rhat_max}{The maximum rhat for p (and potentially M), which can be used
+  for evaluating convergence}
+  \item{alpha}{The value(s) of alpha used (if method = "mshrink")}
+  \item{beta}{The value of beta used (if method = "mshrink")}
+  \item{lambda}{The value of lambda used (if method = "pshrink")}
 }
 }
 \description{

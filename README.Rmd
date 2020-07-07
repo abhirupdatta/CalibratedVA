@@ -39,9 +39,9 @@ remotes::install_github("jfiksel/CalibratedVA")
 
 ### PHMRC Data
 
-The Population Health Metrics Research Consortium (PHMRC) study contains GS COD data
-for children, neonates and adults in 4 countries, making it a perfect dataset
-to demonstrate the merits of `CalibratedVA`. 
+The Population Health Metrics Research Consortium (PHMRC) study contains gold-standard
+cause-of-death (GS-COD) data for children, neonates and adults in 4 countries,
+making it a perfect dataset to demonstrate the merits of `CalibratedVA`. 
 
 We have used the openVA package to obtain cause-of-death predictions for adult
 deaths from Tanzania. Both InSilicoVA and Tariff were trained using deaths
@@ -86,12 +86,16 @@ simply use the first 200 individuals from the data. We will use the default sett
 for all hyperparameter values.
 
 
-```{r tariff_calibratedva}
+```{r tariff_calibratedva, warning = FALSE, message = FALSE, results = 'hide'}
 causes <- colnames(tariff_tanzania)
-tariff_calibratedva <- calibratedva(A_U = tariff_tanzania[-(1:200),],
-                                    A_L = tariff_tanzania[1:200,],
-                                    G_L = gs_cod_tanzania[1:200,],
-                                    causes = causes)
+tariff_calibratedva <- calibratedva(va_unlabeled = tariff_tanzania[-(1:200),],
+                                    va_labeled = tariff_tanzania[1:200,],
+                                    gold_standard = gs_cod_tanzania[1:200,],
+                                    causes = causes,
+                                    nchains = 3,
+                                    ndraws = 10000,
+                                    burnin = 1000,
+                                    alpha = 10)
 ```
 
 We can use the `ggmcmc` package to obtain CSMF estimates for the individual causes,
@@ -136,11 +140,14 @@ ensemble_unlabeled <- list(tariff_tanzania[-(1:200),], insilico_tanzania[-(1:200
 ensemble_labeled <- list(tariff_tanzania[1:200,], insilico_tanzania[1:200,])
 ```
 
-```{r ensemble_calibratedva}
-ensemble_calibratedva <- calibratedva(A_U = ensemble_unlabeled,
-                                      A_L = ensemble_labeled,
-                                      G_L = gs_cod_tanzania[1:200,],
-                                      causes = causes)
+```{r ensemble_calibratedva, warning = FALSE, message = FALSE, results = 'hide'}
+ensemble_calibratedva <- calibratedva(va_unlabeled = ensemble_unlabeled,
+                                      va_labeled = ensemble_labeled,
+                                      gold_standard = gs_cod_tanzania[1:200,],
+                                      causes = causes,
+                                      nchains = 3,
+                                      ndraws = 10000,
+                                      burnin = 1000)
 ```
 
 ```{r ensemble_csmf}
@@ -169,4 +176,4 @@ ggs_density(ensemble_csmf_samples)
 
 ### Additional features
 
-Please view the "Get Started" tab to see additional features in CalibratedVA.
+Please view the ["Get Started"](https://jfiksel.github.io/CalibratedVA/articles/CalibratedVA.html) tab to see additional features in CalibratedVA.

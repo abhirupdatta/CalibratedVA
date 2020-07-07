@@ -1,12 +1,13 @@
 calibratedva_pshrink <- function(A_U, A_L = NULL, G_L = NULL, causes,
                                  power = 1 / 100,
-                                 lambda = 1, ndraws = 10000,
+                                 lambda = 10, ndraws = 10000,
                                  burnin = 1000, thin = 1,
                                  epsilon = .001,
-                                 print.chains = FALSE,
+                                 print.chains = TRUE,
                                  nchains = 3,
                                  init.seed = 123) {
     ### If A_U is a matrix (dimension 2), change to array
+    iter_pct <- round(ndraws * .1)
     if(length(dim(A_U)) == 2) {
         A_U <- matrix_to_array(A_U)
         A_L <- matrix_to_array(A_L)
@@ -49,6 +50,7 @@ calibratedva_pshrink <- function(A_U, A_L = NULL, G_L = NULL, causes,
             T.array.sc <- array(0, dim=c(C,C,K))
         }
     }
+    iter_pct <- round(ndraws * .1)
     posterior.list <- future_lapply(1:nchains, function(chain){
         #seed <- init.seeds[chain]
         #set.seed(seed)
@@ -105,7 +107,9 @@ calibratedva_pshrink <- function(A_U, A_L = NULL, G_L = NULL, causes,
                     sample.T(post.samples[[i]]$M.array[,,k], C, G_L_mc, A_L_int_mc[,,k], T.array.sc[,,k])
                 }, simplify = "array")
             }
-            if((i%%10000)==0 & print.chains) message(paste("Chain", chain, "Draw", i))
+            my_pct <- round(i / ndraws, 1) * 100
+            my_message <- paste("Chain", chain, "Draw", i, "/", ndraws, paste0("[", my_pct, "%]\n"))
+            if((i%%iter_pct)==0 & print.chains) cat(my_message)
         }
         #return(post.samples)
         ### Put everything into a matrix, to be converted into an mcmc object
@@ -131,7 +135,7 @@ calibratedva_pshrink <- function(A_U, A_L = NULL, G_L = NULL, causes,
         cnames <- c(p.names, M.names)
         colnames(post.samples.mat) <- cnames
         return(mcmc(post.samples.mat))
-    }, future.seed = init.seed)
+    }, future.seed = init.seed, future.stdout = NA)
     post.samples.list  <- mcmc.list(posterior.list)
     post.samples.list <- window(post.samples.list, start = burnin, thin = thin)
     return(post.samples.list)

@@ -3,18 +3,18 @@
 #' representative set of deaths without labels, and an unrepresentative set
 #' of deaths with labels, and estimates the calibrated CSMF
 #'
-#' @param A_U When using cause of death predictions from a single algorithm, this
+#' @param va_unlabeled When using cause of death predictions from a single algorithm, this
 #' will be a matrix, where each row gives the predicted cause of death probabilities for
 #' an individual death, for individuals without cause of death labels. Each column represents
 #' a cause. If using the top cause, one entry in each row should be 1, while the rest should be 0.
 #' When using predictions from multiple algorithms for the ensemble approach, this should
 #' be a list of matrices with algorithm predictions for the same individuals, where each
 #' entry in the list are predictions from a given algorithm. See examples for more information
-#' @param A_L A matrix or list in the same format as A_U, but for individuals with labeled
+#' @param va_labeled A matrix or list in the same format as va_unlabeled, but for individuals with labeled
 #' causes of death. If there are no individuals with labeled causes, leave as NULL
-#' @param G_L A matrix where each row represents either the true cause for an individual
+#' @param gold_standard A matrix where each row represents either the true cause for an individual
 #' with a labeled cause of death (i.e. if the label for individual i is cause j, then
-#' G_L[i,j] will be 1, and the other entries of that row will be 0), or the probabilities
+#' gold_standard[i,j] will be 1, and the other entries of that row will be 0), or the probabilities
 #' that each individual died of a certain cause. The rows of \code{G_L} should correspond
 #' to the rows of \code{A_L} (or the rows of each element of \code{A_L} if it is a list)
 #' @param causes A character vector with the names of the causes. These should correspond to
@@ -38,22 +38,40 @@
 #' @param epsilon A numeric value for the epsilon in the prior of M. Default is .001.
 #' @param tau.vec A numeric vector for the log standard deviation for the sampling distributions
 #' of the gammas. Only used for M-shrinkage sampling.
-#' @param init.seed The initial seed for L’Ecuyer-CMRG RNG stream generation. Default is 123.
+#' @param which.multimodal A character specifying whether both p and M (which.multimodal = "all")
+#' should be evaluated for multimodality, or just p (which.multimodal = "p")
+#' @param which.rhat A character specifying whether both p and M (which.rhat = "all")
+#' should be evaluated for convergence, or just p (which.rhat = "p")
+#' @param print.chains A logical scalar which says whether or not you want the 
+#' progress of the sampling printed to the screen. Default is FALSE 
+#' @param init.seed The initial seed for sampling. Default is 123.
 #'
 #' @return A list with the following components.
 #' \describe{
 #'   \item{samples}{A \code{\link[coda]{mcmc.list}} object containing the posterior samples
 #'   for p, M, and gamma (if using M-shrinkage)}
-#'   \item{A_U}{The value of \code{A_U} using for the posterior samples}
-#'   \item{A_L}{The value of \code{A_L} using for the posterior samples}
-#'   \item{G_L}{The value of \code{G_L} using for the posterior samples}
+#'   \item{A_U}{The value of \code{va_unlabeled} using for the posterior samples}
+#'   \item{A_L}{The value of \code{va_labeled} using for the posterior samples}
+#'   \item{G_L}{The value of \code{gold_standard} using for the posterior samples}
+#'   \item{method}{The method used for shrinkage (either mshrink or pshrink)}
+#'   \item{waic}{The estimated WAIC for the calibrated posterior}
+#'   \item{waic_uncalib}{The estimated WAIC for the uncalibrated posterior}
+#'   \item{multimodal}{Either TRUE or FALSE, indicating whether or not the posterior
+#'   samples for p (and potentially M) are multimodal}
+#'   \item{rhat_max}{The maximum rhat for p (and potentially M), which can be used
+#'   for evaluating convergence}
+#'   \item{alpha}{The value(s) of alpha used (if method = "mshrink")}
+#'   \item{beta}{The value of beta used (if method = "mshrink")}
+#'   \item{lambda}{The value of lambda used (if method = "pshrink")}
 #' }
 #' @export
 #' 
 #' @importFrom coda mcmc mcmc.list
 #' @importFrom gtools rdirichlet
 #' @importFrom future.apply future_lapply
-calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
+calibratedva <- function(va_unlabeled,
+                         va_labeled = NULL,
+                         gold_standard = NULL, causes,
                          method = c("mshrink", "pshrink"), nchains = 3,
                          ndraws = 10000, burnin = 1000, thin = 1,
                          pseudo_samplesize = 100,
@@ -62,7 +80,13 @@ calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
                          delta = 1,
                          epsilon = .001,
                          tau = .5, 
+                         which.multimodal = "all",
+                         which.rhat = "all",
+                         print.chains = TRUE, 
                          init.seed = 123) {
+    A_U <- va_unlabeled
+    A_L <- va_labeled
+    G_L <- gold_standard
     ### power corresponds to 1 / pseudo_samplesize
     power <- 1 / pseudo_samplesize
     if(!is.list(A_U) & !is.matrix(A_U)) {
@@ -139,6 +163,7 @@ calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
                                         delta = delta,
                                         epsilon = epsilon,
                                         tau = tau,
+                                        print.chains = print.chains,
                                         init.seed = init.seed)
     } else {
         samples <- calibratedva_pshrink(A_U = A_U, A_L = A_L, G_L = G_L,
@@ -146,12 +171,60 @@ calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
                                         power = power, ndraws = ndraws, burnin = burnin,
                                         thin = thin,
                                         lambda = lambda, epsilon = epsilon,
+                                        print.chains = print.chains,
                                         init.seed = init.seed)
     }
     ### output will be a list
+    ### now get information about samples
+    ### now check whether we're using ensemble or not
+    if(!is_ensemble) {
+        K <- 1
+    }
+    C <- length(causes)
+    multimodal <- ifelse(which.multimodal == "all",
+                         is_multimodal(samples, C = C, K = K),
+                         is_multimodal(samples, C = C, params = "p"))
+    if(is_ensemble) {
+        waic <- quietly_get_waic(samples,
+                                 A_U = A_U_array,
+                                 A_L = A_L_array,
+                                 G_L = G_L,
+                                 method = "ensemble")$result
+    } else {
+        waic <- quietly_get_waic(samples,
+                                 A_U = A_U,
+                                 A_L = A_L,
+                                 G_L = G_L,
+                                 method = "single_alg")$result
+    }
+    ### Finally, get uncalibrated WAIC
+    if(is_ensemble) {
+        waic_uncalib <- quietly_get_waic_uncalib(samples,
+                                                 A_U = A_U_array,
+                                                 A_L = A_L_array,
+                                                 G_L = G_L,
+                                                 method = "ensemble")$result
+    } else {
+        waic_uncalib <- quietly_get_waic_uncalib(samples,
+                                                 A_U = A_U,
+                                                 A_L = A_L,
+                                                 G_L = G_L,
+                                                 method = "single_alg")$result
+    }
+    rhat_max <- ifelse(which.rhat == "all",
+                       max_r_hat(samples, C = C, K = K),
+                       max_r_hat(samples, C = C, K = K, params = "p"))
+    if(method == "mshrink") {
+        lambda <- NULL
+    } else {
+        alpha <- beta <- NULL
+    }
     ### return the list of posterior samples, the inputs, and the settings used
     ### (either ensemble vs single algorithm, and single-cause vs multi-cause)
-    output <- list(samples = samples, A_U = A_U, A_L = A_L, G_L = G_L)
+    output <- list(samples = samples, A_U = A_U, A_L = A_L, G_L = G_L,
+                   method = method, waic = waic, waic_uncalib = waic_uncalib,
+                   multimodal = multimodal, rhat_max = rhat_max,
+                   alpha = alpha, beta = beta, lambda = lambda)
     return(output)
 }
 
@@ -159,11 +232,11 @@ calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
 #' @description Uses a grid search to choose the shrinkage parameter for calibration
 #' which gives the lowest WAIC values.
 #'
-#' @param A_U A matrix or list of causes for individuals without labeled
+#' @param va_unlabeled A matrix or list of causes for individuals without labeled
 #' causes of death. See \code{\link{calibratedva}}.
-#' @param A_L A matrix or list of causes for individuals with labeled
+#' @param va_labeled A matrix or list of causes for individuals with labeled
 #' causes of death. See \code{\link{calibratedva}}.
-#' @param G_L A matrix where each row represents either the true cause for an individual
+#' @param gold_standard A matrix where each row represents either the true cause for an individual
 #' with a labeled cause of death. See \code{\link{calibratedva}}.
 #' @param causes A character vector with the names of the causes. These should correspond to
 #' the columns of \code{A_U}, \code{A_L}, and \code{G_L}
@@ -187,10 +260,6 @@ calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
 #'   Null if using p-shrinkage.}
 #'   \item{lambda_final}{The chosen value of lambda for the posterior samples.
 #'   Null if using M-shrinkage.}
-#'   \item{waic_final}{The WAIC for the posterior samples, using the chosen
-#'   value of alpha or lambda}
-#'   \item{waic_uncalib}{The WAIC corresponding the uncalibrated model where we
-#'   assume that each COD has a sensitivity of .95}
 #'   \item{waic_df}{A data frame containing a row for each parameter evaluated,
 #'   which gives the WAIC, whether or not the posteriors were multimodal, and the
 #'   Rhat of the posterior samples.}
@@ -202,37 +271,61 @@ calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
 #' @importFrom ggmcmc ggs ggs_Rhat
 #' @importFrom loo waic
 #' @importFrom purrr quietly
-tune_calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
+tune_calibratedva <- function(va_unlabeled,
+                              va_labeled = NULL,
+                              gold_standard = NULL, causes,
                               method = c("mshrink", "pshrink"),
                               alpha_vec = NULL, lambda_vec = NULL,
                               samples_list = NULL,
                               which.multimodal = "all",
                               which.rhat = "all",
                               ...) {
+    A_U <- va_unlabeled
+    A_L <- va_labeled
+    G_L <- gold_standard
     set.seed(123)
     log10vec <- c(-3, -2, seq(-1, 2, length = 23))
-    if(is.null(alpha_vec)) {
-        alpha_vec <- 10^log10vec
+    if(is.null(samples_list)) {
+        if(is.null(alpha_vec)) {
+            alpha_vec <- 10^log10vec
+        }
+        if(is.null(lambda_vec)) {
+            lambda_vec=10^(log10vec)
+        }  
+    } else {
+        method_calibration <- samples_list[[1]]$method
+        if(method_calibration != method[1]) {
+            stop(paste("Method used for calibration was", method_calibration,
+                       "but provided method for tuning is", method))
+        }
+        if(method == "mshrink") {
+            alpha_vec <- sapply(samples_list, function(x) x$alpha)
+        } else {
+            lambda_vec <- sapply(samples_list, function(x) x$lambda)
+        }
     }
-    if(is.null(lambda_vec)) {
-        lambda_vec=10^(log10vec)
-    }
+    
+    ### Set method (either mshrink or pshrink)
+    method <- method[1]
     if(is.null(samples_list)) {
         if(method == "mshrink") {
             samples_list <- lapply(alpha_vec, function(alpha) {
+                message(paste0("Calibration for alpha = ", alpha))
                 calibrateva_out <- calibratedva(A_U, A_L, G_L, causes, method = "mshrink",
-                                                alpha = alpha, ...)
+                                                alpha = alpha, which.multimodal = which.multimodal,
+                                                which.rhat = which.rhat, ...)
                 return(calibrateva_out)
             })
         } else {
             samples_list <- lapply(lambda_vec, function(lambda) {
+                message(paste0("Calibration for lambda = ", lambda))
                 calibrateva_out <- calibratedva(A_U, A_L, G_L, causes, method = "pshrink",
-                                                lambda = lambda, ...)
+                                                lambda = lambda, which.multimodal = which.multimodal,
+                                                which.rhat = which.rhat, ...)
                 return(calibrateva_out)
             })
         } 
-    }
-    
+    } 
     ### now check whether we're using ensemble or not
     is_ensemble <- is.list(A_U)
     K <- ifelse(is_ensemble, length(A_U), 1)
@@ -251,27 +344,11 @@ tune_calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
         A_L <- A_L_array
     } 
     waic_df <- do.call(rbind, lapply(seq_along(samples_list), function(i) {
-        calibration <- samples_list[[i]]$samples
-        multimodal <- ifelse(which.multimodal == "all",
-                             is_multimodal(calibration, C = C, K = K),
-                             is_multimodal(calibration, C = C, params = "p"))
-        if(is_ensemble) {
-            waic <- quietly_get_waic(calibration,
-                             A_U = A_U,
-                             A_L = A_L,
-                             G_L = G_L,
-                             method = "ensemble")$result
-        } else {
-            waic <- quietly_get_waic(calibration,
-                                     A_U = A_U,
-                                     A_L = A_L,
-                                     G_L = G_L,
-                                     method = "single_alg")$result
-        }
-        rhat_max <- ifelse(which.rhat == "all",
-                           max_r_hat(calibration, C = C, K = K),
-                           max_r_hat(calibration, C = C, K = K, params = "p"))
-        param <- ifelse(method == "mshrink", alpha_vec[i], lambda_vec[i])
+        calibration <- samples_list[[i]]
+        multimodal <- calibration$multimodal
+        waic <- calibration$waic
+        rhat_max <- calibration$rhat_max
+        param <- ifelse(method == "mshrink", calibration$alpha[1], calibration$lambda)
         df <- data.frame(param = param, 
                          waic_calib = waic,
                          multimodal = multimodal, 
@@ -281,9 +358,9 @@ tune_calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
     ### pick final model
     waic_df <- arrange(waic_df, param)
     if(method == "mshrink") {
-        my_param <- pick_param(waic_df, param_vec = alpha_vec)
+        my_param <- pick_param(waic_df, param_vec = sort(alpha_vec))
     } else {
-        my_param <- pick_param(waic_df, param_vec = lambda_vec)
+        my_param <- pick_param(waic_df, param_vec = sort(lambda_vec))
     }
     
     alpha_final <- switch(method == "mshrink", my_param, NULL)
@@ -291,27 +368,9 @@ tune_calibratedva <- function(A_U, A_L = NULL, G_L = NULL, causes,
     param_index <- ifelse(method == "mshrink",
                           which(alpha_vec == my_param),
                           which(lambda_vec == my_param))
-    df_index <- which(waic_df$param == my_param)
-    waic_final <- waic_df$waic_calib[df_index]
     final_samples <- samples_list[[param_index]]
-    ### Finally, get uncalibrated WAIC
-    if(is_ensemble) {
-        waic_uncalib <- quietly_get_waic_uncalib(final_samples$samples,
-                                                 A_U = A_U,
-                                                 A_L = A_L,
-                                                 G_L = G_L,
-                                                 method = "ensemble")$result
-    } else {
-        waic_uncalib <- quietly_get_waic_uncalib(final_samples$samples,
-                                                 A_U = A_U,
-                                                 A_L = A_L,
-                                                 G_L = G_L,
-                                                 method = "single_alg")$result
-    }
     return(list(final_model = final_samples,
                 alpha_final = alpha_final,
                 lambda_final = lambda_final,
-                waic_final = waic_final,
-                waic_uncalib = waic_uncalib,
                 waic_df = waic_df))
 }

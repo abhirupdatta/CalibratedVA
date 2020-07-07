@@ -26,18 +26,19 @@ Many countries cannot conduct full autopsies for the majority of deaths due to e
 If we are interested in obtaining causes of death for a large amount of individuals in a
 region or country, in order to determine optimal resource allocation, we need an efficient
 way to scale the process of determining the COD from VA data. Several algorithms have
-recently been proposed to automatically predict COD from VA records. These *computer coded* VA (CCVA) algorithms predict COD using the VA records as input. Examples include Tariff [@tariff; @tariff2], interVA [@interva], and InsilicoVA [@insilico]. These algorithms all require some gold standard (GS) information -- either a training dataset with both VA symptom data and
-a gold standard (GS) COD determined for each individual or some symptom-given-cause probability matrix.
+recently been proposed to automatically predict COD from VA records. These *computer coded* VA (CCVA) algorithms predict COD using the VA records as input. Examples include Tariff [@tariff; @tariff2], interVA [@interva], and InsilicoVA [@insilico]. These algorithms all require some gold standard (GS) information -- either a training dataset with both VA symptom data and a gold standard (GS) COD determined for each individual or some symptom-given-cause probability matrix.
 
-If we are interested in obtaining national estimates of cause specific mortality fraction (CSMF), we cantrain one of the above CCVA algorithms with GS COD data from our country of interest,
-obtain individual predictions from CCVA data for the country of interest, and then aggregate the predictions to the CSMF level. However,
-there may be limited amounts of GS COD data for a new country. In addition,
+If we are interested in obtaining national estimates of cause specific mortality fraction (CSMF), we can train one of the above CCVA algorithms with GS COD data from our country of interest,
+obtain individual predictions from CCVA data for the country of interest, and then aggregate the predictions to the CSMF level. However,there may be limited amounts of GS COD data for a new country. In addition,
 algorithms trained on GS COD from other countries may not be as accurate.
 
 The CalibratedVA package is to be used for exactly the situation above--
 we take predictions from one or multiple algorithm(s) trained on a large 
-non-local dataset, and use the local GS COD dataset to improve the
-CSMF estimates via local calibration.
+non-local dataset, and use the local GS-COD dataset to improve the
+CSMF estimates via local calibration. The CalibratedVA package can be used for
+when both the VA algorithm(s) and GS-COD give single causes of death [@BTL], and
+can be extended to use probabilistic output from VA algorithms, as well as
+incorporating uncertainty in the GS-COD labels [@GBQL].
 
 ## PHMRC Data
 
@@ -89,12 +90,15 @@ simply use the first 200 individuals from the data. We will use the default sett
 for all hyperparameter values.
 
 
-```{r tariff_calibratedva}
+```{r tariff_calibratedva, warning = FALSE, message = FALSE, results = 'hide'}
 causes <- colnames(tariff_tanzania)
-tariff_calibratedva <- calibratedva(A_U = tariff_tanzania[-(1:200),],
-                                    A_L = tariff_tanzania[1:200,],
-                                    G_L = gs_cod_tanzania[1:200,],
-                                    causes = causes)
+tariff_calibratedva <- calibratedva(va_unlabeled = tariff_tanzania[-(1:200),],
+                                    va_labeled = tariff_tanzania[1:200,],
+                                    gold_standard = gs_cod_tanzania[1:200,],
+                                    causes = causes,
+                                    nchains = 3,
+                                    ndraws = 10000,
+                                    burnin = 1000)
 ```
 
 We can use the `ggmcmc` package to obtain CSMF estimates for the individual causes,
@@ -139,11 +143,14 @@ ensemble_unlabeled <- list(tariff_tanzania[-(1:200),], insilico_tanzania[-(1:200
 ensemble_labeled <- list(tariff_tanzania[1:200,], insilico_tanzania[1:200,])
 ```
 
-```{r ensemble_calibratedva}
-ensemble_calibratedva <- calibratedva(A_U = ensemble_unlabeled,
-                                      A_L = ensemble_labeled,
-                                      G_L = gs_cod_tanzania[1:200,],
-                                      causes = causes)
+```{r ensemble_calibratedva, warning = FALSE, message = FALSE, results = 'hide'}
+ensemble_calibratedva <- calibratedva(va_unlabeled = ensemble_unlabeled,
+                                      va_labeled = ensemble_labeled,
+                                      gold_standard = gs_cod_tanzania[1:200,],
+                                      causes = causes,
+                                      nchains = 3,
+                                      ndraws = 10000,
+                                      burnin = 1000)
 ```
 
 ```{r ensemble_csmf}
@@ -178,12 +185,15 @@ We can increase the alpha parameter to increase the amount of shrinkage. As an e
 example, we will set alpha = 500, and show that the estimated CSMF is very similar to the
 predicted CSMF 
 
-```{r tariff_highshrinkage, cache = TRUE, message = FALSE}
-tariff_highshrinkage <- calibratedva(A_U = tariff_tanzania[-(1:200),],
-                                    A_L = tariff_tanzania[1:200,],
-                                    G_L = gs_cod_tanzania[1:200,],
+```{r tariff_highshrinkage, warning = FALSE, message = FALSE, results = 'hide'}
+tariff_highshrinkage <- calibratedva(va_unlabeled = tariff_tanzania[-(1:200),],
+                                    va_labeled = tariff_tanzania[1:200,],
+                                    gold_standard = gs_cod_tanzania[1:200,],
                                     causes = causes,
-                                    alpha = 500)
+                                    alpha = 500,
+                                    nchains = 3,
+                                    ndraws = 10000,
+                                    burnin = 1000)
 ```
 
 ```{r tariff_highshrinkage_csmf}
@@ -196,7 +206,7 @@ tariff_highshrinkage_csmf
 colMeans(tariff_tanzania[-(1:200),])
 ```
 
-### Bayesian approach using CSMF shrinkage
+### Using CSMF shrinkage
 
 Rather than shrinking the misclassification matrix ("M") to the identity matrix,
 we can directly shrink the CSMF ("p") to the predicted CSMF on the unlabeled data.
@@ -205,13 +215,19 @@ the level of shrinkage is controlled by `lambda`, where higher values
 lead to more shrinkage. Setting `lambda = 1` (the default) will lead to little
 shrinkage.
 
-```{r tariff_pshrink, fig.width = 8, fig.height = 12}
-tariff_pshrink <- calibratedva(A_U = tariff_tanzania[-(1:200),],
-                               A_L = tariff_tanzania[1:200,],
-                               G_L = gs_cod_tanzania[1:200,],
+```{r tariff_pshrink, warning = FALSE, message = FALSE, results = 'hide'}
+tariff_pshrink <- calibratedva(va_unlabeled = tariff_tanzania[-(1:200),],
+                               va_labeled = tariff_tanzania[1:200,],
+                               gold_standard = gs_cod_tanzania[1:200,],
                                causes = causes,
                                method = "pshrink",
-                               lambda = 1)
+                               lambda = 1,
+                               nchains = 3,
+                               ndraws = 10000,
+                               burnin = 1000)
+```
+
+```{r tariff_pshrink_density, fig.width = 8, fig.height = 12}
 ggs_density(ggs(tariff_pshrink$samples, par_labels=P, family="p"))
 ```
 
@@ -223,14 +239,19 @@ over a larger number of values. We will also reduce the number of draws from 10,
 to 5,000. This is not necessarily recommended, but will reduce the run-time for 
 this example.
 
-```{r tariff_tune, fig.width = 8, fig.height = 12}
-tariff_pshrink_tuned <- tune_calibratedva(A_U = tariff_tanzania[-(1:200),],
-                                          A_L = tariff_tanzania[1:200,],
-                                          G_L = gs_cod_tanzania[1:200,],
+```{r tariff_tune, warning = FALSE, message = FALSE, results = 'hide'}
+tariff_pshrink_tuned <- tune_calibratedva(va_unlabeled = tariff_tanzania[-(1:200),],
+                                          va_labeled = tariff_tanzania[1:200,],
+                                          gold_standard = gs_cod_tanzania[1:200,],
                                           causes = causes,
                                           method = "pshrink",
-                                          lambda_vec  = c(.1, 1, 10, 50, 100),
-                                          ndraws = 5000)
+                                          lambda_vec  = c(.1, 1, 10, 100),
+                                          nchains = 3,
+                                          ndraws = 5000,
+                                          burnin = 1000)
+```
+
+```{r tariff_tune_density, fig.width = 8, fig.height = 12}
 ggs_density(ggs(tariff_pshrink_tuned$final_model$samples, par_labels=P, family="p"))
 ```
 
@@ -239,8 +260,8 @@ as well as to the WAIC values for all values of the parameter we performed the
 grid search over:
 
 ```{r waic_compare}
-tariff_pshrink_tuned$waic_final
-tariff_pshrink_tuned$waic_uncalib
+tariff_pshrink_tuned$final_model$waic
+tariff_pshrink_tuned$final_model$waic_uncalib
 tariff_pshrink_tuned$waic_df
 ```
 
@@ -249,23 +270,28 @@ of lambda (or alpha for M-shrinkage), and supplying this list to `tune_calibrate
 This is especially useful if we want to use parallelization to run the Gibbs sampling
 for the grid search, and then obtain the best model.
 
-```{r tariff_tune_lapply}
-lambda_vec <- c(.1, 1, 10, 50, 100)
+```{r tariff_tune_lapply, warning = FALSE, message = FALSE, results = 'hide'}
+lambda_vec <- c(.1, 1, 10, 100)
 tariff_samples_list <-lapply(lambda_vec, function(lambda) {
-  calibrateva_out <- calibratedva(A_U = tariff_tanzania[-(1:200),],
-                                  A_L = tariff_tanzania[1:200,],
-                                  G_L = gs_cod_tanzania[1:200,],
+  calibrateva_out <- calibratedva(va_unlabeled = tariff_tanzania[-(1:200),],
+                                  va_labeled = tariff_tanzania[1:200,],
+                                  gold_standard = gs_cod_tanzania[1:200,],
                                   causes = causes, method = "pshrink",
-                                  lambda = lambda, ndraws = 5000)
+                                  lambda = lambda,
+                                  nchains = 3,
+                                  ndraws = 5000,
+                                  burnin = 1000)
   return(calibrateva_out)
 })
-tariff_pshrink_tuned2 <- tune_calibratedva(A_U = tariff_tanzania[-(1:200),],
-                                           A_L = tariff_tanzania[1:200,],
-                                           G_L = gs_cod_tanzania[1:200,],
+tariff_pshrink_tuned2 <- tune_calibratedva(va_unlabeled = tariff_tanzania[-(1:200),],
+                                           va_labeled = tariff_tanzania[1:200,],
+                                           gold_standard = gs_cod_tanzania[1:200,],
                                            causes = causes,
                                            method = "pshrink",
-                                           samples_list = tariff_samples_list,
-                                           lambda_vec  = c(.1, 1, 10, 50, 100))
+                                           samples_list = tariff_samples_list)
+```
+
+```{r check_identical}
 identical(tariff_pshrink_tuned$waic_df, tariff_pshrink_tuned2$waic_df)
 ```
 

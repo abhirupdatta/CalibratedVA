@@ -125,9 +125,9 @@ of deaths with labels, and estimates the calibrated CSMF</p>
     </div>
 
     <pre class="usage"><span class='fu'>calibratedva</span>(
-  <span class='no'>A_U</span>,
-  <span class='kw'>A_L</span> <span class='kw'>=</span> <span class='kw'>NULL</span>,
-  <span class='kw'>G_L</span> <span class='kw'>=</span> <span class='kw'>NULL</span>,
+  <span class='no'>va_unlabeled</span>,
+  <span class='kw'>va_labeled</span> <span class='kw'>=</span> <span class='kw'>NULL</span>,
+  <span class='kw'>gold_standard</span> <span class='kw'>=</span> <span class='kw'>NULL</span>,
   <span class='no'>causes</span>,
   <span class='kw'>method</span> <span class='kw'>=</span> <span class='fu'><a href='https://rdrr.io/r/base/c.html'>c</a></span>(<span class='st'>"mshrink"</span>, <span class='st'>"pshrink"</span>),
   <span class='kw'>nchains</span> <span class='kw'>=</span> <span class='fl'>3</span>,
@@ -141,6 +141,9 @@ of deaths with labels, and estimates the calibrated CSMF</p>
   <span class='kw'>delta</span> <span class='kw'>=</span> <span class='fl'>1</span>,
   <span class='kw'>epsilon</span> <span class='kw'>=</span> <span class='fl'>0.001</span>,
   <span class='kw'>tau</span> <span class='kw'>=</span> <span class='fl'>0.5</span>,
+  <span class='kw'>which.multimodal</span> <span class='kw'>=</span> <span class='st'>"all"</span>,
+  <span class='kw'>which.rhat</span> <span class='kw'>=</span> <span class='st'>"all"</span>,
+  <span class='kw'>print.chains</span> <span class='kw'>=</span> <span class='fl'>FALSE</span>,
   <span class='kw'>init.seed</span> <span class='kw'>=</span> <span class='fl'>123</span>
 )</pre>
 
@@ -148,7 +151,7 @@ of deaths with labels, and estimates the calibrated CSMF</p>
     <table class="ref-arguments">
     <colgroup><col class="name" /><col class="desc" /></colgroup>
     <tr>
-      <th>A_U</th>
+      <th>va_unlabeled</th>
       <td><p>When using cause of death predictions from a single algorithm, this
 will be a matrix, where each row gives the predicted cause of death probabilities for
 an individual death, for individuals without cause of death labels. Each column represents
@@ -158,15 +161,15 @@ be a list of matrices with algorithm predictions for the same individuals, where
 entry in the list are predictions from a given algorithm. See examples for more information</p></td>
     </tr>
     <tr>
-      <th>A_L</th>
-      <td><p>A matrix or list in the same format as A_U, but for individuals with labeled
+      <th>va_labeled</th>
+      <td><p>A matrix or list in the same format as va_unlabeled, but for individuals with labeled
 causes of death. If there are no individuals with labeled causes, leave as NULL</p></td>
     </tr>
     <tr>
-      <th>G_L</th>
+      <th>gold_standard</th>
       <td><p>A matrix where each row represents either the true cause for an individual
 with a labeled cause of death (i.e. if the label for individual i is cause j, then
-G_L[i,j] will be 1, and the other entries of that row will be 0), or the probabilities
+gold_standard[i,j] will be 1, and the other entries of that row will be 0), or the probabilities
 that each individual died of a certain cause. The rows of <code>G_L</code> should correspond
 to the rows of <code>A_L</code> (or the rows of each element of <code>A_L</code> if it is a list)</p></td>
     </tr>
@@ -223,8 +226,23 @@ M-shrinkage sampling.</p></td>
       <td><p>A numeric value for the epsilon in the prior of M. Default is .001.</p></td>
     </tr>
     <tr>
+      <th>which.multimodal</th>
+      <td><p>A character specifying whether both p and M (which.multimodal = "all")
+should be evaluated for multimodality, or just p (which.multimodal = "p")</p></td>
+    </tr>
+    <tr>
+      <th>which.rhat</th>
+      <td><p>A character specifying whether both p and M (which.rhat = "all")
+should be evaluated for convergence, or just p (which.rhat = "p")</p></td>
+    </tr>
+    <tr>
+      <th>print.chains</th>
+      <td><p>A logical scalar which says whether or not you want the 
+progress of the sampling printed to the screen. Default is FALSE</p></td>
+    </tr>
+    <tr>
       <th>init.seed</th>
-      <td><p>The initial seed for L’Ecuyer-CMRG RNG stream generation. Default is 123.</p></td>
+      <td><p>The initial seed for sampling. Default is 123.</p></td>
     </tr>
     <tr>
       <th>tau.vec</th>
@@ -238,9 +256,19 @@ of the gammas. Only used for M-shrinkage sampling.</p></td>
     <p>A list with the following components.</p><dl'>
   <dt>samples</dt><dd><p>A <code><a href='https://rdrr.io/pkg/coda/man/mcmc.list.html'>mcmc.list</a></code> object containing the posterior samples
   for p, M, and gamma (if using M-shrinkage)</p></dd>
-  <dt>A_U</dt><dd><p>The value of <code>A_U</code> using for the posterior samples</p></dd>
-  <dt>A_L</dt><dd><p>The value of <code>A_L</code> using for the posterior samples</p></dd>
-  <dt>G_L</dt><dd><p>The value of <code>G_L</code> using for the posterior samples</p></dd>
+  <dt>A_U</dt><dd><p>The value of <code>va_unlabeled</code> using for the posterior samples</p></dd>
+  <dt>A_L</dt><dd><p>The value of <code>va_labeled</code> using for the posterior samples</p></dd>
+  <dt>G_L</dt><dd><p>The value of <code>gold_standard</code> using for the posterior samples</p></dd>
+  <dt>method</dt><dd><p>The method used for shrinkage (either mshrink or pshrink)</p></dd>
+  <dt>waic</dt><dd><p>The estimated WAIC for the calibrated posterior</p></dd>
+  <dt>waic_uncalib</dt><dd><p>The estimated WAIC for the uncalibrated posterior</p></dd>
+  <dt>multimodal</dt><dd><p>Either TRUE or FALSE, indicating whether or not the posterior
+  samples for p (and potentially M) are multimodal</p></dd>
+  <dt>rhat_max</dt><dd><p>The maximum rhat for p (and potentially M), which can be used
+  for evaluating convergence</p></dd>
+  <dt>alpha</dt><dd><p>The value(s) of alpha used (if method = "mshrink")</p></dd>
+  <dt>beta</dt><dd><p>The value of beta used (if method = "mshrink")</p></dd>
+  <dt>lambda</dt><dd><p>The value of lambda used (if method = "pshrink")</p></dd>
 
 </dl>
 

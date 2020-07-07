@@ -30,8 +30,9 @@ remotes::install_github("jfiksel/CalibratedVA")
 ### PHMRC Data
 
 The Population Health Metrics Research Consortium (PHMRC) study contains
-GS COD data for children, neonates and adults in 4 countries, making it
-a perfect dataset to demonstrate the merits of `CalibratedVA`.
+gold-standard cause-of-death (GS-COD) data for children, neonates and
+adults in 4 countries, making it a perfect dataset to demonstrate the
+merits of `CalibratedVA`.
 
 We have used the openVA package to obtain cause-of-death predictions for
 adult deaths from Tanzania. Both InSilicoVA and Tariff were trained
@@ -42,9 +43,6 @@ for each death from Tanzania.
 
 ``` r
 library(CalibratedVA)
-#> Registered S3 method overwritten by 'GGally':
-#>   method from   
-#>   +.gg   ggplot2
 data("insilico_tanzania")
 data("tariff_tanzania")
 data("gs_cod_tanzania")
@@ -85,10 +83,14 @@ values.
 
 ``` r
 causes <- colnames(tariff_tanzania)
-tariff_calibratedva <- calibratedva(A_U = tariff_tanzania[-(1:200),],
-                                    A_L = tariff_tanzania[1:200,],
-                                    G_L = gs_cod_tanzania[1:200,],
-                                    causes = causes)
+tariff_calibratedva <- calibratedva(va_unlabeled = tariff_tanzania[-(1:200),],
+                                    va_labeled = tariff_tanzania[1:200,],
+                                    gold_standard = gs_cod_tanzania[1:200,],
+                                    causes = causes,
+                                    nchains = 3,
+                                    ndraws = 10000,
+                                    burnin = 1000,
+                                    alpha = 10)
 ```
 
 We can use the `ggmcmc` package to obtain CSMF estimates for the
@@ -96,17 +98,6 @@ individual causes, along with credible intervals.
 
 ``` r
 library(ggmcmc)
-#> Loading required package: dplyr
-#> 
-#> Attaching package: 'dplyr'
-#> The following objects are masked from 'package:stats':
-#> 
-#>     filter, lag
-#> The following objects are masked from 'package:base':
-#> 
-#>     intersect, setdiff, setequal, union
-#> Loading required package: tidyr
-#> Loading required package: ggplot2
 P <- data.frame(
   Parameter=paste0("p[", 1:length(causes), "]"),
   Label=causes)
@@ -165,10 +156,13 @@ ensemble_labeled <- list(tariff_tanzania[1:200,], insilico_tanzania[1:200,])
 ```
 
 ``` r
-ensemble_calibratedva <- calibratedva(A_U = ensemble_unlabeled,
-                                      A_L = ensemble_labeled,
-                                      G_L = gs_cod_tanzania[1:200,],
-                                      causes = causes)
+ensemble_calibratedva <- calibratedva(va_unlabeled = ensemble_unlabeled,
+                                      va_labeled = ensemble_labeled,
+                                      gold_standard = gs_cod_tanzania[1:200,],
+                                      causes = causes,
+                                      nchains = 3,
+                                      ndraws = 10000,
+                                      burnin = 1000)
 ```
 
 ``` r
@@ -185,11 +179,11 @@ ensemble_csmf
 #> # A tibble: 5 x 4
 #>   Parameter          csmf   ci_L  ci_U
 #>   <fct>             <dbl>  <dbl> <dbl>
-#> 1 circulatory      0.0689 0.0167 0.134
-#> 2 external         0.168  0.0631 0.288
-#> 3 infectious       0.271  0.0450 0.493
-#> 4 maternal         0.172  0.0446 0.309
-#> 5 non_communicable 0.320  0.119  0.524
+#> 1 circulatory      0.0703 0.0153 0.137
+#> 2 external         0.185  0.0863 0.286
+#> 3 infectious       0.306  0.0992 0.552
+#> 4 maternal         0.163  0.0473 0.308
+#> 5 non_communicable 0.276  0.0896 0.489
 ```
 
 We can also view the
@@ -212,5 +206,6 @@ ggs_density(ensemble_csmf_samples)
 
 ### Additional features
 
-Please view the “Get Started” tab to see additional features in
-CalibratedVA.
+Please view the [“Get
+Started”](https://jfiksel.github.io/CalibratedVA/articles/CalibratedVA.html)
+tab to see additional features in CalibratedVA.

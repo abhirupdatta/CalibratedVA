@@ -85,15 +85,16 @@
 <p>You can then install the development version of CalibratedVA from <a href="https://github.com/">GitHub</a> with:</p>
 <div class="sourceCode" id="cb2"><pre class="r"><span class="co"># install.packages("remotes")</span>
 <span class="kw pkg">remotes</span><span class="kw ns">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html">install_github</a></span>(<span class="st">"jfiksel/CalibratedVA"</span>)</pre></div>
-<div id="getting-started-with-calibratedva" class="section level3">
+</div>
+<div id="getting-started-with-calibratedva" class="section level2">
+<h2 class="hasAnchor">
+<a href="#getting-started-with-calibratedva" class="anchor"></a>Getting started with CalibratedVA</h2>
+<div id="phmrc-data" class="section level3">
 <h3 class="hasAnchor">
-<a href="#getting-started-with-calibratedva" class="anchor"></a>Getting started with CalibratedVA</h3>
-<p>The Population Health Metrics Research Consortium (PHMRC) study contains GS COD data for children, neonates and adults in 4 countries, making it a perfect dataset to demonstrate the merits of <code>CalibratedVA</code>.</p>
+<a href="#phmrc-data" class="anchor"></a>PHMRC Data</h3>
+<p>The Population Health Metrics Research Consortium (PHMRC) study contains gold-standard cause-of-death (GS-COD) data for children, neonates and adults in 4 countries, making it a perfect dataset to demonstrate the merits of <code>CalibratedVA</code>.</p>
 <p>We have used the openVA package to obtain cause-of-death predictions for adult deaths from Tanzania. Both InSilicoVA and Tariff were trained using deaths from the other 3 countries. We obtained individual cause probability predictions from InSilicoVA and individual top cause-of-death predictions from Tariff. We will also read in the GS-COD for each death from Tanzania.</p>
 <div class="sourceCode" id="cb3"><pre class="r"><span class="fu"><a href="https://rdrr.io/r/base/library.html">library</a></span>(<span class="no">CalibratedVA</span>)
-<span class="co">#&gt; Registered S3 method overwritten by 'GGally':</span>
-<span class="co">#&gt;   method from   </span>
-<span class="co">#&gt;   +.gg   ggplot2</span>
 <span class="fu"><a href="https://rdrr.io/r/utils/data.html">data</a></span>(<span class="st">"insilico_tanzania"</span>)
 <span class="fu"><a href="https://rdrr.io/r/utils/data.html">data</a></span>(<span class="st">"tariff_tanzania"</span>)
 <span class="fu"><a href="https://rdrr.io/r/utils/data.html">data</a></span>(<span class="st">"gs_cod_tanzania"</span>)</pre></div>
@@ -105,31 +106,20 @@
 <div class="sourceCode" id="cb6"><pre class="r"><span class="no">tariff_tanzania</span> <span class="kw">&lt;-</span> <span class="fu"><a href="reference/map_causes.html">map_causes</a></span>(<span class="no">tariff_tanzania</span>$<span class="no">cause</span>, <span class="no">phmrc_adult_cause_map</span>)
 <span class="no">gs_cod_tanzania</span> <span class="kw">&lt;-</span> <span class="fu"><a href="reference/map_causes.html">map_causes</a></span>(<span class="no">gs_cod_tanzania</span>, <span class="no">phmrc_adult_cause_map</span>)</pre></div>
 </div>
-<div id="calibratedva-1" class="section level3">
+<div id="single-algorithm-predictions" class="section level3">
 <h3 class="hasAnchor">
-<a href="#calibratedva-1" class="anchor"></a>CalibratedVA</h3>
-<div id="single-algorithm-predictions" class="section level4">
-<h4 class="hasAnchor">
-<a href="#single-algorithm-predictions" class="anchor"></a>Single algorithm predictions</h4>
+<a href="#single-algorithm-predictions" class="anchor"></a>Single algorithm predictions</h3>
 <p>We will first run CalibratedVA using the Tariff predictions. To run CalibratedVA, we will first select a set of individuals to be in our “hospital” set–that is, individuals for whom we know their GS-COD. These individuals will be used for estimation of algorithm misclassification rates. We will simply use the first 200 individuals from the data. We will use the default settings for all hyperparameter values.</p>
 <div class="sourceCode" id="cb7"><pre class="r"><span class="no">causes</span> <span class="kw">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html">colnames</a></span>(<span class="no">tariff_tanzania</span>)
-<span class="no">tariff_calibratedva</span> <span class="kw">&lt;-</span> <span class="fu"><a href="reference/calibratedva.html">calibratedva</a></span>(<span class="kw">A_U</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[-(<span class="fl">1</span>:<span class="fl">200</span>),],
-                                    <span class="kw">A_L</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
-                                    <span class="kw">G_L</span> <span class="kw">=</span> <span class="no">gs_cod_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
-                                    <span class="kw">causes</span> <span class="kw">=</span> <span class="no">causes</span>)</pre></div>
+<span class="no">tariff_calibratedva</span> <span class="kw">&lt;-</span> <span class="fu"><a href="reference/calibratedva.html">calibratedva</a></span>(<span class="kw">va_unlabeled</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[-(<span class="fl">1</span>:<span class="fl">200</span>),],
+                                    <span class="kw">va_labeled</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
+                                    <span class="kw">gold_standard</span> <span class="kw">=</span> <span class="no">gs_cod_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
+                                    <span class="kw">causes</span> <span class="kw">=</span> <span class="no">causes</span>,
+                                    <span class="kw">nchains</span> <span class="kw">=</span> <span class="fl">3</span>,
+                                    <span class="kw">ndraws</span> <span class="kw">=</span> <span class="fl">2000</span>,
+                                    <span class="kw">burnin</span> <span class="kw">=</span> <span class="fl">1000</span>)</pre></div>
 <p>We can use the <code>ggmcmc</code> package to obtain CSMF estimates for the individual causes, along with credible intervals.</p>
 <div class="sourceCode" id="cb8"><pre class="r"><span class="fu"><a href="https://rdrr.io/r/base/library.html">library</a></span>(<span class="no">ggmcmc</span>)
-<span class="co">#&gt; Loading required package: dplyr</span>
-<span class="co">#&gt; </span>
-<span class="co">#&gt; Attaching package: 'dplyr'</span>
-<span class="co">#&gt; The following objects are masked from 'package:stats':</span>
-<span class="co">#&gt; </span>
-<span class="co">#&gt;     filter, lag</span>
-<span class="co">#&gt; The following objects are masked from 'package:base':</span>
-<span class="co">#&gt; </span>
-<span class="co">#&gt;     intersect, setdiff, setequal, union</span>
-<span class="co">#&gt; Loading required package: tidyr</span>
-<span class="co">#&gt; Loading required package: ggplot2</span>
 <span class="no">P</span> <span class="kw">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html">data.frame</a></span>(
   <span class="kw">Parameter</span><span class="kw">=</span><span class="fu"><a href="https://rdrr.io/r/base/paste.html">paste0</a></span>(<span class="st">"p["</span>, <span class="fl">1</span>:<span class="fu"><a href="https://rdrr.io/r/base/length.html">length</a></span>(<span class="no">causes</span>), <span class="st">"]"</span>),
   <span class="kw">Label</span><span class="kw">=</span><span class="no">causes</span>)
@@ -162,16 +152,19 @@
 <div class="sourceCode" id="cb10"><pre class="r"><span class="fu"><a href="https://rdrr.io/pkg/ggmcmc/man/ggs_density.html">ggs_density</a></span>(<span class="no">tariff_csmf_samples</span>)</pre></div>
 <p><img src="reference/figures/README-tariff_csmf_density_plot-1.png" width="100%"></p>
 </div>
-<div id="using-predictions-from-multiple-algorithms-ensemble" class="section level4">
-<h4 class="hasAnchor">
-<a href="#using-predictions-from-multiple-algorithms-ensemble" class="anchor"></a>Using predictions from multiple algorithms (ensemble)</h4>
+<div id="using-predictions-from-multiple-algorithms-ensemble" class="section level3">
+<h3 class="hasAnchor">
+<a href="#using-predictions-from-multiple-algorithms-ensemble" class="anchor"></a>Using predictions from multiple algorithms (ensemble)</h3>
 <p>We can use both the predictions from both InSilicoVA and Tariff to better estimate the CSMF using the ensemble approach. We simply need to format the predictions into a list of matrices</p>
 <div class="sourceCode" id="cb11"><pre class="r"><span class="no">ensemble_unlabeled</span> <span class="kw">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html">list</a></span>(<span class="no">tariff_tanzania</span>[-(<span class="fl">1</span>:<span class="fl">200</span>),], <span class="no">insilico_tanzania</span>[-(<span class="fl">1</span>:<span class="fl">200</span>),])
 <span class="no">ensemble_labeled</span> <span class="kw">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html">list</a></span>(<span class="no">tariff_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,], <span class="no">insilico_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,])</pre></div>
-<div class="sourceCode" id="cb12"><pre class="r"><span class="no">ensemble_calibratedva</span> <span class="kw">&lt;-</span> <span class="fu"><a href="reference/calibratedva.html">calibratedva</a></span>(<span class="kw">A_U</span> <span class="kw">=</span> <span class="no">ensemble_unlabeled</span>,
-                                      <span class="kw">A_L</span> <span class="kw">=</span> <span class="no">ensemble_labeled</span>,
-                                      <span class="kw">G_L</span> <span class="kw">=</span> <span class="no">gs_cod_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
-                                      <span class="kw">causes</span> <span class="kw">=</span> <span class="no">causes</span>)</pre></div>
+<div class="sourceCode" id="cb12"><pre class="r"><span class="no">ensemble_calibratedva</span> <span class="kw">&lt;-</span> <span class="fu"><a href="reference/calibratedva.html">calibratedva</a></span>(<span class="kw">va_unlabeled</span> <span class="kw">=</span> <span class="no">ensemble_unlabeled</span>,
+                                      <span class="kw">va_labeled</span> <span class="kw">=</span> <span class="no">ensemble_labeled</span>,
+                                      <span class="kw">gold_standard</span> <span class="kw">=</span> <span class="no">gs_cod_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
+                                      <span class="kw">causes</span> <span class="kw">=</span> <span class="no">causes</span>,
+                                      <span class="kw">nchains</span> <span class="kw">=</span> <span class="fl">3</span>,
+                                      <span class="kw">ndraws</span> <span class="kw">=</span> <span class="fl">2000</span>,
+                                      <span class="kw">burnin</span> <span class="kw">=</span> <span class="fl">1000</span>)</pre></div>
 <div class="sourceCode" id="cb13"><pre class="r"><span class="no">ensemble_csmf_samples</span> <span class="kw">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/ggmcmc/man/ggs.html">ggs</a></span>(<span class="no">ensemble_calibratedva</span>$<span class="no">samples</span>, <span class="kw">par_labels</span><span class="kw">=</span><span class="no">P</span>, <span class="kw">family</span><span class="kw">=</span><span class="st">"p"</span>)
 <span class="co">### CSMF with credible intervals</span>
 <span class="no">ensemble_csmf</span> <span class="kw">&lt;-</span>
@@ -185,11 +178,11 @@
 <span class="co">#&gt; # A tibble: 5 x 4</span>
 <span class="co">#&gt;   Parameter          csmf   ci_L  ci_U</span>
 <span class="co">#&gt;   &lt;fct&gt;             &lt;dbl&gt;  &lt;dbl&gt; &lt;dbl&gt;</span>
-<span class="co">#&gt; 1 circulatory      0.0689 0.0167 0.134</span>
-<span class="co">#&gt; 2 external         0.168  0.0631 0.288</span>
-<span class="co">#&gt; 3 infectious       0.271  0.0450 0.493</span>
-<span class="co">#&gt; 4 maternal         0.172  0.0446 0.309</span>
-<span class="co">#&gt; 5 non_communicable 0.320  0.119  0.524</span></pre></div>
+<span class="co">#&gt; 1 circulatory      0.0703 0.0153 0.137</span>
+<span class="co">#&gt; 2 external         0.185  0.0863 0.286</span>
+<span class="co">#&gt; 3 infectious       0.306  0.0992 0.552</span>
+<span class="co">#&gt; 4 maternal         0.163  0.0473 0.308</span>
+<span class="co">#&gt; 5 non_communicable 0.276  0.0896 0.489</span></pre></div>
 <p>We can also view the traceplot</p>
 <div class="sourceCode" id="cb14"><pre class="r"><span class="fu"><a href="https://rdrr.io/pkg/ggmcmc/man/ggs_traceplot.html">ggs_traceplot</a></span>(<span class="no">ensemble_csmf_samples</span>)</pre></div>
 <p><img src="reference/figures/README-ensemble_csmf_traceplot-1.png" width="100%"></p>
@@ -197,11 +190,10 @@
 <div class="sourceCode" id="cb15"><pre class="r"><span class="fu"><a href="https://rdrr.io/pkg/ggmcmc/man/ggs_density.html">ggs_density</a></span>(<span class="no">ensemble_csmf_samples</span>)</pre></div>
 <p><img src="reference/figures/README-ensemble_csmf_density_plot-1.png" width="100%"></p>
 </div>
-</div>
 <div id="additional-features" class="section level3">
 <h3 class="hasAnchor">
 <a href="#additional-features" class="anchor"></a>Additional features</h3>
-<p>Please view the article “Overview of CalibratedVA” for additional features in CalibratedVA.</p>
+<p>Please view the <a href="https://jfiksel.github.io/CalibratedVA/articles/CalibratedVA.html">“Get Started”</a> tab to see additional features in CalibratedVA.</p>
 </div>
 </div>
 </div>

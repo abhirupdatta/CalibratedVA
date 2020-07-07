@@ -73,7 +73,7 @@
       <h1 data-toc-skip>Overview of CalibratedVA</h1>
                         <h4 class="author">Jacob Fiksel</h4>
             
-            <h4 class="date">2020-06-18</h4>
+            <h4 class="date">2020-07-07</h4>
       
       <small class="dont-index">Source: <a href="https://github.com/jfiksel/CalibratedVA/blob/master/vignettes/CalibratedVA.Rmd"><code>vignettes/CalibratedVA.Rmd</code></a></small>
       <div class="hidden name"><code>CalibratedVA.Rmd</code></div>
@@ -87,8 +87,8 @@
 <a href="#introduction" class="anchor"></a>Introduction</h2>
 <p>Many countries cannot conduct full autopsies for the majority of deaths due to either cultural or economic limitations <span class="citation">(AbouZahr et al. 2015; Allotey et al. 2015)</span>. Rather than perform an invasive autopsy, an alternative method to determine the cause (or “etiology”) of death (COD) is to conduct a <em>verbal autopsy</em> (VA), where relatives of the deceased individual are asked a set list of questions to obtain information about symptoms experienced by the deceased observed prior to death <span class="citation">(Soleman, Chandramohan, and Shibuya 2006)</span>. Medical experts can then use these VA responses to determine the COD for an individual.</p>
 <p>If we are interested in obtaining causes of death for a large amount of individuals in a region or country, in order to determine optimal resource allocation, we need an efficient way to scale the process of determining the COD from VA data. Several algorithms have recently been proposed to automatically predict COD from VA records. These <em>computer coded</em> VA (CCVA) algorithms predict COD using the VA records as input. Examples include Tariff <span class="citation">(James, Flaxman, and Murray 2011; Serina et al. 2015)</span>, interVA <span class="citation">(Byass et al. 2012)</span>, and InsilicoVA <span class="citation">(McCormick et al. 2016)</span>. These algorithms all require some gold standard (GS) information – either a training dataset with both VA symptom data and a gold standard (GS) COD determined for each individual or some symptom-given-cause probability matrix.</p>
-<p>If we are interested in obtaining national estimates of cause specific mortality fraction (CSMF), we cantrain one of the above CCVA algorithms with GS COD data from our country of interest, obtain individual predictions from CCVA data for the country of interest, and then aggregate the predictions to the CSMF level. However, there may be limited amounts of GS COD data for a new country. In addition, algorithms trained on GS COD from other countries may not be as accurate.</p>
-<p>The CalibratedVA package is to be used for exactly the situation above– we take predictions from one or multiple algorithm(s) trained on a large non-local dataset, and use the local GS COD dataset to improve the CSMF estimates via local calibration.</p>
+<p>If we are interested in obtaining national estimates of cause specific mortality fraction (CSMF), we can train one of the above CCVA algorithms with GS COD data from our country of interest, obtain individual predictions from CCVA data for the country of interest, and then aggregate the predictions to the CSMF level. However,there may be limited amounts of GS COD data for a new country. In addition, algorithms trained on GS COD from other countries may not be as accurate.</p>
+<p>The CalibratedVA package is to be used for exactly the situation above– we take predictions from one or multiple algorithm(s) trained on a large non-local dataset, and use the local GS-COD dataset to improve the CSMF estimates via local calibration. The CalibratedVA package can be used for when both the VA algorithm(s) and GS-COD give single causes of death <span class="citation">(Datta et al. 2018)</span>, and can be extended to use probabilistic output from VA algorithms, as well as incorporating uncertainty in the GS-COD labels <span class="citation">(<strong>Fiksel</strong> et al. 2020)</span>.</p>
 </div>
 <div id="phmrc-data" class="section level2">
 <h2 class="hasAnchor">
@@ -115,10 +115,13 @@
 <a href="#single-algorithm-predictions" class="anchor"></a>Single algorithm predictions</h3>
 <p>We will first run CalibratedVA using the Tariff predictions. To run CalibratedVA, we will first select a set of individuals to be in our “hospital” set–that is, individuals for whom we know their GS-COD. These individuals will be used for estimation of algorithm misclassification rates. We will simply use the first 200 individuals from the data. We will use the default settings for all hyperparameter values.</p>
 <div class="sourceCode" id="cb5"><html><body><pre class="r"><span class="no">causes</span> <span class="kw">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html">colnames</a></span>(<span class="no">tariff_tanzania</span>)
-<span class="no">tariff_calibratedva</span> <span class="kw">&lt;-</span> <span class="fu"><a href="../reference/calibratedva.html">calibratedva</a></span>(<span class="kw">A_U</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[-(<span class="fl">1</span>:<span class="fl">200</span>),],
-                                    <span class="kw">A_L</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
-                                    <span class="kw">G_L</span> <span class="kw">=</span> <span class="no">gs_cod_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
-                                    <span class="kw">causes</span> <span class="kw">=</span> <span class="no">causes</span>)</pre></body></html></div>
+<span class="no">tariff_calibratedva</span> <span class="kw">&lt;-</span> <span class="fu"><a href="../reference/calibratedva.html">calibratedva</a></span>(<span class="kw">va_unlabeled</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[-(<span class="fl">1</span>:<span class="fl">200</span>),],
+                                    <span class="kw">va_labeled</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
+                                    <span class="kw">gold_standard</span> <span class="kw">=</span> <span class="no">gs_cod_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
+                                    <span class="kw">causes</span> <span class="kw">=</span> <span class="no">causes</span>,
+                                    <span class="kw">nchains</span> <span class="kw">=</span> <span class="fl">3</span>,
+                                    <span class="kw">ndraws</span> <span class="kw">=</span> <span class="fl">10000</span>,
+                                    <span class="kw">burnin</span> <span class="kw">=</span> <span class="fl">1000</span>)</pre></body></html></div>
 <p>We can use the <code>ggmcmc</code> package to obtain CSMF estimates for the individual causes, along with credible intervals.</p>
 <div class="sourceCode" id="cb6"><html><body><pre class="r"><span class="fu"><a href="https://rdrr.io/r/base/library.html">library</a></span>(<span class="no">ggmcmc</span>)
 <span class="no">P</span> <span class="kw">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html">data.frame</a></span>(
@@ -154,10 +157,13 @@
 <p>We can use both the predictions from both InSilicoVA and Tariff to better estimate the CSMF using the ensemble approach. We simply need to format the predictions into a list of matrices</p>
 <div class="sourceCode" id="cb9"><html><body><pre class="r"><span class="no">ensemble_unlabeled</span> <span class="kw">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html">list</a></span>(<span class="no">tariff_tanzania</span>[-(<span class="fl">1</span>:<span class="fl">200</span>),], <span class="no">insilico_tanzania</span>[-(<span class="fl">1</span>:<span class="fl">200</span>),])
 <span class="no">ensemble_labeled</span> <span class="kw">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html">list</a></span>(<span class="no">tariff_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,], <span class="no">insilico_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,])</pre></body></html></div>
-<div class="sourceCode" id="cb10"><html><body><pre class="r"><span class="no">ensemble_calibratedva</span> <span class="kw">&lt;-</span> <span class="fu"><a href="../reference/calibratedva.html">calibratedva</a></span>(<span class="kw">A_U</span> <span class="kw">=</span> <span class="no">ensemble_unlabeled</span>,
-                                      <span class="kw">A_L</span> <span class="kw">=</span> <span class="no">ensemble_labeled</span>,
-                                      <span class="kw">G_L</span> <span class="kw">=</span> <span class="no">gs_cod_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
-                                      <span class="kw">causes</span> <span class="kw">=</span> <span class="no">causes</span>)</pre></body></html></div>
+<div class="sourceCode" id="cb10"><html><body><pre class="r"><span class="no">ensemble_calibratedva</span> <span class="kw">&lt;-</span> <span class="fu"><a href="../reference/calibratedva.html">calibratedva</a></span>(<span class="kw">va_unlabeled</span> <span class="kw">=</span> <span class="no">ensemble_unlabeled</span>,
+                                      <span class="kw">va_labeled</span> <span class="kw">=</span> <span class="no">ensemble_labeled</span>,
+                                      <span class="kw">gold_standard</span> <span class="kw">=</span> <span class="no">gs_cod_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
+                                      <span class="kw">causes</span> <span class="kw">=</span> <span class="no">causes</span>,
+                                      <span class="kw">nchains</span> <span class="kw">=</span> <span class="fl">3</span>,
+                                      <span class="kw">ndraws</span> <span class="kw">=</span> <span class="fl">10000</span>,
+                                      <span class="kw">burnin</span> <span class="kw">=</span> <span class="fl">1000</span>)</pre></body></html></div>
 <div class="sourceCode" id="cb11"><html><body><pre class="r"><span class="no">ensemble_csmf_samples</span> <span class="kw">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/ggmcmc/man/ggs.html">ggs</a></span>(<span class="no">ensemble_calibratedva</span>$<span class="no">samples</span>, <span class="kw">par_labels</span><span class="kw">=</span><span class="no">P</span>, <span class="kw">family</span><span class="kw">=</span><span class="st">"p"</span>)
 <span class="co">### CSMF with credible intervals</span>
 <span class="no">ensemble_csmf</span> <span class="kw">&lt;-</span>
@@ -170,11 +176,11 @@
 <span class="co">#&gt; # A tibble: 5 x 4</span>
 <span class="co">#&gt;   Parameter          csmf   ci_L  ci_U</span>
 <span class="co">#&gt;   &lt;fct&gt;             &lt;dbl&gt;  &lt;dbl&gt; &lt;dbl&gt;</span>
-<span class="co">#&gt; 1 circulatory      0.0689 0.0167 0.134</span>
-<span class="co">#&gt; 2 external         0.168  0.0631 0.288</span>
-<span class="co">#&gt; 3 infectious       0.271  0.0450 0.493</span>
-<span class="co">#&gt; 4 maternal         0.172  0.0446 0.309</span>
-<span class="co">#&gt; 5 non_communicable 0.320  0.119  0.524</span></pre></body></html></div>
+<span class="co">#&gt; 1 circulatory      0.0703 0.0153 0.137</span>
+<span class="co">#&gt; 2 external         0.185  0.0863 0.286</span>
+<span class="co">#&gt; 3 infectious       0.306  0.0992 0.552</span>
+<span class="co">#&gt; 4 maternal         0.163  0.0473 0.308</span>
+<span class="co">#&gt; 5 non_communicable 0.276  0.0896 0.489</span></pre></body></html></div>
 <p>We can also view the traceplot</p>
 <div class="sourceCode" id="cb12"><html><body><pre class="r"><span class="fu"><a href="https://rdrr.io/pkg/ggmcmc/man/ggs_traceplot.html">ggs_traceplot</a></span>(<span class="no">ensemble_csmf_samples</span>)</pre></body></html></div>
 <p><img src="CalibratedVA_files/figure-html/ensemble_csmf_traceplot-1.png" width="768"></p>
@@ -190,11 +196,14 @@
 <h3 class="hasAnchor">
 <a href="#increasing-levels-of-shrinkage" class="anchor"></a>Increasing levels of shrinkage</h3>
 <p>We can increase the alpha parameter to increase the amount of shrinkage. As an extreme example, we will set alpha = 500, and show that the estimated CSMF is very similar to the predicted CSMF</p>
-<div class="sourceCode" id="cb14"><html><body><pre class="r"><span class="no">tariff_highshrinkage</span> <span class="kw">&lt;-</span> <span class="fu"><a href="../reference/calibratedva.html">calibratedva</a></span>(<span class="kw">A_U</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[-(<span class="fl">1</span>:<span class="fl">200</span>),],
-                                    <span class="kw">A_L</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
-                                    <span class="kw">G_L</span> <span class="kw">=</span> <span class="no">gs_cod_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
+<div class="sourceCode" id="cb14"><html><body><pre class="r"><span class="no">tariff_highshrinkage</span> <span class="kw">&lt;-</span> <span class="fu"><a href="../reference/calibratedva.html">calibratedva</a></span>(<span class="kw">va_unlabeled</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[-(<span class="fl">1</span>:<span class="fl">200</span>),],
+                                    <span class="kw">va_labeled</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
+                                    <span class="kw">gold_standard</span> <span class="kw">=</span> <span class="no">gs_cod_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
                                     <span class="kw">causes</span> <span class="kw">=</span> <span class="no">causes</span>,
-                                    <span class="kw">alpha</span> <span class="kw">=</span> <span class="fl">500</span>)</pre></body></html></div>
+                                    <span class="kw">alpha</span> <span class="kw">=</span> <span class="fl">500</span>,
+                                    <span class="kw">nchains</span> <span class="kw">=</span> <span class="fl">3</span>,
+                                    <span class="kw">ndraws</span> <span class="kw">=</span> <span class="fl">10000</span>,
+                                    <span class="kw">burnin</span> <span class="kw">=</span> <span class="fl">1000</span>)</pre></body></html></div>
 <div class="sourceCode" id="cb15"><html><body><pre class="r"><span class="co">### CSMF with credible intervals</span>
 <span class="no">tariff_highshrinkage_csmf</span> <span class="kw">&lt;-</span>
   <span class="fu"><a href="https://rdrr.io/pkg/ggmcmc/man/ggs.html">ggs</a></span>(<span class="no">tariff_highshrinkage</span>$<span class="no">samples</span>, <span class="kw">par_labels</span><span class="kw">=</span><span class="no">P</span>, <span class="kw">family</span><span class="kw">=</span><span class="st">"p"</span>) <span class="kw">%&gt;%</span>
@@ -215,58 +224,64 @@
 <span class="co">#&gt; non_communicable </span>
 <span class="co">#&gt;        0.2759188</span></pre></body></html></div>
 </div>
-<div id="bayesian-approach-using-csmf-shrinkage" class="section level3">
+<div id="using-csmf-shrinkage" class="section level3">
 <h3 class="hasAnchor">
-<a href="#bayesian-approach-using-csmf-shrinkage" class="anchor"></a>Bayesian approach using CSMF shrinkage</h3>
+<a href="#using-csmf-shrinkage" class="anchor"></a>Using CSMF shrinkage</h3>
 <p>Rather than shrinking the misclassification matrix (“M”) to the identity matrix, we can directly shrink the CSMF (“p”) to the predicted CSMF on the unlabeled data. This is simply done using <code>method = "pshrink"</code>. When using this method, the level of shrinkage is controlled by <code>lambda</code>, where higher values lead to more shrinkage. Setting <code>lambda = 1</code> (the default) will lead to little shrinkage.</p>
-<div class="sourceCode" id="cb16"><html><body><pre class="r"><span class="no">tariff_pshrink</span> <span class="kw">&lt;-</span> <span class="fu"><a href="../reference/calibratedva.html">calibratedva</a></span>(<span class="kw">A_U</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[-(<span class="fl">1</span>:<span class="fl">200</span>),],
-                               <span class="kw">A_L</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
-                               <span class="kw">G_L</span> <span class="kw">=</span> <span class="no">gs_cod_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
+<div class="sourceCode" id="cb16"><html><body><pre class="r"><span class="no">tariff_pshrink</span> <span class="kw">&lt;-</span> <span class="fu"><a href="../reference/calibratedva.html">calibratedva</a></span>(<span class="kw">va_unlabeled</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[-(<span class="fl">1</span>:<span class="fl">200</span>),],
+                               <span class="kw">va_labeled</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
+                               <span class="kw">gold_standard</span> <span class="kw">=</span> <span class="no">gs_cod_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
                                <span class="kw">causes</span> <span class="kw">=</span> <span class="no">causes</span>,
                                <span class="kw">method</span> <span class="kw">=</span> <span class="st">"pshrink"</span>,
-                               <span class="kw">lambda</span> <span class="kw">=</span> <span class="fl">1</span>)
-<span class="fu"><a href="https://rdrr.io/pkg/ggmcmc/man/ggs_density.html">ggs_density</a></span>(<span class="fu"><a href="https://rdrr.io/pkg/ggmcmc/man/ggs.html">ggs</a></span>(<span class="no">tariff_pshrink</span>$<span class="no">samples</span>, <span class="kw">par_labels</span><span class="kw">=</span><span class="no">P</span>, <span class="kw">family</span><span class="kw">=</span><span class="st">"p"</span>))</pre></body></html></div>
-<p><img src="CalibratedVA_files/figure-html/tariff_pshrink-1.png" width="768"></p>
+                               <span class="kw">lambda</span> <span class="kw">=</span> <span class="fl">1</span>,
+                               <span class="kw">nchains</span> <span class="kw">=</span> <span class="fl">3</span>,
+                               <span class="kw">ndraws</span> <span class="kw">=</span> <span class="fl">10000</span>,
+                               <span class="kw">burnin</span> <span class="kw">=</span> <span class="fl">1000</span>)</pre></body></html></div>
+<div class="sourceCode" id="cb17"><html><body><pre class="r"><span class="fu"><a href="https://rdrr.io/pkg/ggmcmc/man/ggs_density.html">ggs_density</a></span>(<span class="fu"><a href="https://rdrr.io/pkg/ggmcmc/man/ggs.html">ggs</a></span>(<span class="no">tariff_pshrink</span>$<span class="no">samples</span>, <span class="kw">par_labels</span><span class="kw">=</span><span class="no">P</span>, <span class="kw">family</span><span class="kw">=</span><span class="st">"p"</span>))</pre></body></html></div>
+<p><img src="CalibratedVA_files/figure-html/tariff_pshrink_density-1.png" width="768"></p>
 <p>We can see that the above approach leads to multimodality. We can use the <code>tune_calibratedva</code> function to choose a value of <code>lambda</code> which has the best WAIC, and for which the posterior will be unimodal and will have a low Rhat. The below example only uses 5 values of lambda for the gridsearch, but we recommend searching over a larger number of values. We will also reduce the number of draws from 10,000 (default) to 5,000. This is not necessarily recommended, but will reduce the run-time for this example.</p>
-<div class="sourceCode" id="cb17"><html><body><pre class="r"><span class="no">tariff_pshrink_tuned</span> <span class="kw">&lt;-</span> <span class="fu"><a href="../reference/tune_calibratedva.html">tune_calibratedva</a></span>(<span class="kw">A_U</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[-(<span class="fl">1</span>:<span class="fl">200</span>),],
-                                          <span class="kw">A_L</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
-                                          <span class="kw">G_L</span> <span class="kw">=</span> <span class="no">gs_cod_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
+<div class="sourceCode" id="cb18"><html><body><pre class="r"><span class="no">tariff_pshrink_tuned</span> <span class="kw">&lt;-</span> <span class="fu"><a href="../reference/tune_calibratedva.html">tune_calibratedva</a></span>(<span class="kw">va_unlabeled</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[-(<span class="fl">1</span>:<span class="fl">200</span>),],
+                                          <span class="kw">va_labeled</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
+                                          <span class="kw">gold_standard</span> <span class="kw">=</span> <span class="no">gs_cod_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
                                           <span class="kw">causes</span> <span class="kw">=</span> <span class="no">causes</span>,
                                           <span class="kw">method</span> <span class="kw">=</span> <span class="st">"pshrink"</span>,
-                                          <span class="kw">lambda_vec</span>  <span class="kw">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span>(<span class="fl">.1</span>, <span class="fl">1</span>, <span class="fl">10</span>, <span class="fl">50</span>, <span class="fl">100</span>),
-                                          <span class="kw">ndraws</span> <span class="kw">=</span> <span class="fl">5000</span>)
-<span class="fu"><a href="https://rdrr.io/pkg/ggmcmc/man/ggs_density.html">ggs_density</a></span>(<span class="fu"><a href="https://rdrr.io/pkg/ggmcmc/man/ggs.html">ggs</a></span>(<span class="no">tariff_pshrink_tuned</span>$<span class="no">final_model</span>$<span class="no">samples</span>, <span class="kw">par_labels</span><span class="kw">=</span><span class="no">P</span>, <span class="kw">family</span><span class="kw">=</span><span class="st">"p"</span>))</pre></body></html></div>
-<p><img src="CalibratedVA_files/figure-html/tariff_tune-1.png" width="768"></p>
+                                          <span class="kw">lambda_vec</span>  <span class="kw">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span>(<span class="fl">.1</span>, <span class="fl">1</span>, <span class="fl">10</span>, <span class="fl">100</span>),
+                                          <span class="kw">nchains</span> <span class="kw">=</span> <span class="fl">3</span>,
+                                          <span class="kw">ndraws</span> <span class="kw">=</span> <span class="fl">5000</span>,
+                                          <span class="kw">burnin</span> <span class="kw">=</span> <span class="fl">1000</span>)</pre></body></html></div>
+<div class="sourceCode" id="cb19"><html><body><pre class="r"><span class="fu"><a href="https://rdrr.io/pkg/ggmcmc/man/ggs_density.html">ggs_density</a></span>(<span class="fu"><a href="https://rdrr.io/pkg/ggmcmc/man/ggs.html">ggs</a></span>(<span class="no">tariff_pshrink_tuned</span>$<span class="no">final_model</span>$<span class="no">samples</span>, <span class="kw">par_labels</span><span class="kw">=</span><span class="no">P</span>, <span class="kw">family</span><span class="kw">=</span><span class="st">"p"</span>))</pre></body></html></div>
+<p><img src="CalibratedVA_files/figure-html/tariff_tune_density-1.png" width="768"></p>
 <p>We can also compare the WAIC of the chosen model to the WAIC of the uncalibrated model, as well as to the WAIC values for all values of the parameter we performed the grid search over:</p>
-<div class="sourceCode" id="cb18"><html><body><pre class="r"><span class="no">tariff_pshrink_tuned</span>$<span class="no">waic_final</span>
+<div class="sourceCode" id="cb20"><html><body><pre class="r"><span class="no">tariff_pshrink_tuned</span>$<span class="no">final_model</span>$<span class="no">waic</span>
 <span class="co">#&gt; [1] 6256.641</span>
-<span class="no">tariff_pshrink_tuned</span>$<span class="no">waic_uncalib</span>
-<span class="co">#&gt; [1] 8224.48</span>
+<span class="no">tariff_pshrink_tuned</span>$<span class="no">final_model</span>$<span class="no">waic_uncalib</span>
+<span class="co">#&gt; [1] 8224.373</span>
 <span class="no">tariff_pshrink_tuned</span>$<span class="no">waic_df</span>
 <span class="co">#&gt;   param waic_calib multimodal rhat_max</span>
 <span class="co">#&gt; 1   0.1   6269.791       TRUE 1.908583</span>
 <span class="co">#&gt; 2   1.0   6263.065       TRUE 1.939429</span>
 <span class="co">#&gt; 3  10.0   6257.456      FALSE 1.171580</span>
-<span class="co">#&gt; 4  50.0   6256.721      FALSE 1.045764</span>
-<span class="co">#&gt; 5 100.0   6256.641      FALSE 1.026168</span></pre></body></html></div>
+<span class="co">#&gt; 4 100.0   6256.641      FALSE 1.026168</span></pre></body></html></div>
 <p>We can also tune the models by collecting a list of models for different values of lambda (or alpha for M-shrinkage), and supplying this list to <code>tune_calibratedva</code>. This is especially useful if we want to use parallelization to run the Gibbs sampling for the grid search, and then obtain the best model.</p>
-<div class="sourceCode" id="cb19"><html><body><pre class="r"><span class="no">lambda_vec</span> <span class="kw">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span>(<span class="fl">.1</span>, <span class="fl">1</span>, <span class="fl">10</span>, <span class="fl">50</span>, <span class="fl">100</span>)
+<div class="sourceCode" id="cb21"><html><body><pre class="r"><span class="no">lambda_vec</span> <span class="kw">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span>(<span class="fl">.1</span>, <span class="fl">1</span>, <span class="fl">10</span>, <span class="fl">100</span>)
 <span class="no">tariff_samples_list</span> <span class="kw">&lt;-</span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html">lapply</a></span>(<span class="no">lambda_vec</span>, <span class="kw">function</span>(<span class="no">lambda</span>) {
-  <span class="no">calibrateva_out</span> <span class="kw">&lt;-</span> <span class="fu"><a href="../reference/calibratedva.html">calibratedva</a></span>(<span class="kw">A_U</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[-(<span class="fl">1</span>:<span class="fl">200</span>),],
-                                  <span class="kw">A_L</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
-                                  <span class="kw">G_L</span> <span class="kw">=</span> <span class="no">gs_cod_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
+  <span class="no">calibrateva_out</span> <span class="kw">&lt;-</span> <span class="fu"><a href="../reference/calibratedva.html">calibratedva</a></span>(<span class="kw">va_unlabeled</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[-(<span class="fl">1</span>:<span class="fl">200</span>),],
+                                  <span class="kw">va_labeled</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
+                                  <span class="kw">gold_standard</span> <span class="kw">=</span> <span class="no">gs_cod_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
                                   <span class="kw">causes</span> <span class="kw">=</span> <span class="no">causes</span>, <span class="kw">method</span> <span class="kw">=</span> <span class="st">"pshrink"</span>,
-                                  <span class="kw">lambda</span> <span class="kw">=</span> <span class="no">lambda</span>, <span class="kw">ndraws</span> <span class="kw">=</span> <span class="fl">5000</span>)
+                                  <span class="kw">lambda</span> <span class="kw">=</span> <span class="no">lambda</span>,
+                                  <span class="kw">nchains</span> <span class="kw">=</span> <span class="fl">3</span>,
+                                  <span class="kw">ndraws</span> <span class="kw">=</span> <span class="fl">5000</span>,
+                                  <span class="kw">burnin</span> <span class="kw">=</span> <span class="fl">1000</span>)
   <span class="fu"><a href="https://rdrr.io/r/base/function.html">return</a></span>(<span class="no">calibrateva_out</span>)
 })
-<span class="no">tariff_pshrink_tuned2</span> <span class="kw">&lt;-</span> <span class="fu"><a href="../reference/tune_calibratedva.html">tune_calibratedva</a></span>(<span class="kw">A_U</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[-(<span class="fl">1</span>:<span class="fl">200</span>),],
-                                           <span class="kw">A_L</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
-                                           <span class="kw">G_L</span> <span class="kw">=</span> <span class="no">gs_cod_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
+<span class="no">tariff_pshrink_tuned2</span> <span class="kw">&lt;-</span> <span class="fu"><a href="../reference/tune_calibratedva.html">tune_calibratedva</a></span>(<span class="kw">va_unlabeled</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[-(<span class="fl">1</span>:<span class="fl">200</span>),],
+                                           <span class="kw">va_labeled</span> <span class="kw">=</span> <span class="no">tariff_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
+                                           <span class="kw">gold_standard</span> <span class="kw">=</span> <span class="no">gs_cod_tanzania</span>[<span class="fl">1</span>:<span class="fl">200</span>,],
                                            <span class="kw">causes</span> <span class="kw">=</span> <span class="no">causes</span>,
                                            <span class="kw">method</span> <span class="kw">=</span> <span class="st">"pshrink"</span>,
-                                           <span class="kw">samples_list</span> <span class="kw">=</span> <span class="no">tariff_samples_list</span>,
-                                           <span class="kw">lambda_vec</span>  <span class="kw">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span>(<span class="fl">.1</span>, <span class="fl">1</span>, <span class="fl">10</span>, <span class="fl">50</span>, <span class="fl">100</span>))
-<span class="fu"><a href="https://rdrr.io/r/base/identical.html">identical</a></span>(<span class="no">tariff_pshrink_tuned</span>$<span class="no">waic_df</span>, <span class="no">tariff_pshrink_tuned2</span>$<span class="no">waic_df</span>)
+                                           <span class="kw">samples_list</span> <span class="kw">=</span> <span class="no">tariff_samples_list</span>)</pre></body></html></div>
+<div class="sourceCode" id="cb22"><html><body><pre class="r"><span class="fu"><a href="https://rdrr.io/r/base/identical.html">identical</a></span>(<span class="no">tariff_pshrink_tuned</span>$<span class="no">waic_df</span>, <span class="no">tariff_pshrink_tuned2</span>$<span class="no">waic_df</span>)
 <span class="co">#&gt; [1] TRUE</span></pre></body></html></div>
 </div>
 </div>
@@ -282,6 +297,12 @@
 </div>
 <div id="ref-interva">
 <p>Byass, Peter, Daniel Chandramohan, Samuel J Clark, Lucia D’ambruoso, Edward Fottrell, Wendy J Graham, Abraham J Herbst, et al. 2012. “Strengthening Standardised Interpretation of Verbal Autopsy Data: The New Interva-4 Tool.” <em>Global Health Action</em> 5 (1). Taylor &amp; Francis: 19281.</p>
+</div>
+<div id="ref-BTL">
+<p>Datta, Abhirup, <strong>Jacob</strong> <strong>Fiksel</strong>, Agbessi Amouzou, and Scott Zeger. 2018. “Regularized Bayesian transfer learning for population level etiological distributions.” <em>Biostatistics</em>.</p>
+</div>
+<div id="ref-GBQL">
+<p><strong>Fiksel</strong>, <strong>Jacob</strong>, Abhirup Datta, Agbessi Amouzou, and Scott Zeger. 2020. “Generalized Bayesian Quantification Learning.” <em>arXiv E-Prints</em>, January, arXiv:2001.05360.</p>
 </div>
 <div id="ref-tariff">
 <p>James, Spencer L, Abraham D Flaxman, and Christopher JL Murray. 2011. “Performance of the Tariff Method: Validation of a Simple Additive Algorithm for Analysis of Verbal Autopsies.” <em>Population Health Metrics</em> 9 (1). BioMed Central: 31.</p>

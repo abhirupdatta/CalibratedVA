@@ -123,9 +123,9 @@ which gives the lowest WAIC values.</p>
     </div>
 
     <pre class="usage"><span class='fu'>tune_calibratedva</span>(
-  <span class='no'>A_U</span>,
-  <span class='kw'>A_L</span> <span class='kw'>=</span> <span class='kw'>NULL</span>,
-  <span class='kw'>G_L</span> <span class='kw'>=</span> <span class='kw'>NULL</span>,
+  <span class='no'>va_unlabeled</span>,
+  <span class='kw'>va_labeled</span> <span class='kw'>=</span> <span class='kw'>NULL</span>,
+  <span class='kw'>gold_standard</span> <span class='kw'>=</span> <span class='kw'>NULL</span>,
   <span class='no'>causes</span>,
   <span class='kw'>method</span> <span class='kw'>=</span> <span class='fu'><a href='https://rdrr.io/r/base/c.html'>c</a></span>(<span class='st'>"mshrink"</span>, <span class='st'>"pshrink"</span>),
   <span class='kw'>alpha_vec</span> <span class='kw'>=</span> <span class='kw'>NULL</span>,
@@ -140,17 +140,17 @@ which gives the lowest WAIC values.</p>
     <table class="ref-arguments">
     <colgroup><col class="name" /><col class="desc" /></colgroup>
     <tr>
-      <th>A_U</th>
+      <th>va_unlabeled</th>
       <td><p>A matrix or list of causes for individuals without labeled
 causes of death. See <code><a href='calibratedva.html'>calibratedva</a></code>.</p></td>
     </tr>
     <tr>
-      <th>A_L</th>
+      <th>va_labeled</th>
       <td><p>A matrix or list of causes for individuals with labeled
 causes of death. See <code><a href='calibratedva.html'>calibratedva</a></code>.</p></td>
     </tr>
     <tr>
-      <th>G_L</th>
+      <th>gold_standard</th>
       <td><p>A matrix where each row represents either the true cause for an individual
 with a labeled cause of death. See <code><a href='calibratedva.html'>calibratedva</a></code>.</p></td>
     </tr>
@@ -199,10 +199,6 @@ should be evaluated for convergence, or just p (which.rhat = "p")</p></td>
   Null if using p-shrinkage.</p></dd>
   <dt>lambda_final</dt><dd><p>The chosen value of lambda for the posterior samples.
   Null if using M-shrinkage.</p></dd>
-  <dt>waic_final</dt><dd><p>The WAIC for the posterior samples, using the chosen
-  value of alpha or lambda</p></dd>
-  <dt>waic_uncalib</dt><dd><p>The WAIC corresponding the uncalibrated model where we
-  assume that each COD has a sensitivity of .95</p></dd>
   <dt>waic_df</dt><dd><p>A data frame containing a row for each parameter evaluated,
   which gives the WAIC, whether or not the posteriors were multimodal, and the
   Rhat of the posterior samples.</p></dd>
