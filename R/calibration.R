@@ -79,7 +79,7 @@ calibratedva <- function(va_unlabeled,
                          lambda = 1,
                          delta = 1,
                          epsilon = .001,
-                         tau = .5, 
+                         tau = .5, mode.cutoff = .1,
                          which.multimodal = "all",
                          which.rhat = "all",
                          print.chains = TRUE, 
@@ -182,8 +182,8 @@ calibratedva <- function(va_unlabeled,
     }
     C <- length(causes)
     multimodal <- ifelse(which.multimodal == "all",
-                         is_multimodal(samples, C = C, K = K),
-                         is_multimodal(samples, C = C, params = "p"))
+                         is_multimodal(samples, C = C, K = K, cutoff=mode.cutoff),
+                         is_multimodal(samples, C = C, params = "p", cutoff=mode.cutoff))
     if(is_ensemble) {
         waic <- quietly_get_waic(samples,
                                  A_U = A_U_array,
