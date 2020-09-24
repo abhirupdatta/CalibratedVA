@@ -170,7 +170,7 @@ calibratedva_mshrink <- function(A_U, A_L = NULL, G_L = NULL, causes, ndraws = 1
         return(mcmc(post.samples.mat))
     }, future.seed = init.seed, future.stdout = NA)
     post.samples.list  <- mcmc.list(posterior.list)
-    post.samples.list <- window(post.samples.list, start = burnin, thin = thin)
+    post.samples.list <- window(post.samples.list, start = burnin+1, thin = thin)
     return(post.samples.list)
 }
 
