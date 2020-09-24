@@ -1,4 +1,4 @@
-calibratedva_mshrink <- function(A_U, A_L = NULL, G_L = NULL, causes, nddraws = 10000,
+calibratedva_mshrink <- function(A_U, A_L = NULL, G_L = NULL, causes, ndraws = 10000,
                                  burnin = 1000, thin = 1,
                                  power = 1 / 100,
                                  alpha = 5, beta = .5,
@@ -8,7 +8,7 @@ calibratedva_mshrink <- function(A_U, A_L = NULL, G_L = NULL, causes, nddraws = 
                                  print.chains = TRUE,
                                  nchains = 3,
                                  init.seed = 123) {
-    total.draws <- n.draws+burnin
+    total.draws <- ndraws+burnin
     
     ### If A_U is a matrix (dimension 2), change to array
     if(length(dim(A_U)) == 2) {

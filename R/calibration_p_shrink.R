@@ -6,7 +6,7 @@ calibratedva_pshrink <- function(A_U, A_L = NULL, G_L = NULL, causes,
                                  print.chains = TRUE,
                                  nchains = 3,
                                  init.seed = 123) {
-    total.draws <- total.draws+burnin
+    total.draws <- ndraws+burnin
     
     ### If A_U is a matrix (dimension 2), change to array
     iter_pct <- round(total.draws * .1)
