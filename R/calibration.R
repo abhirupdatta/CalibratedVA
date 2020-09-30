@@ -219,7 +219,7 @@ calibratedva <- function(va_unlabeled,
     ### (either ensemble vs single algorithm, and single-cause vs multi-cause)
     output <- list(samples = samples, A_U = A_U, A_L = A_L, G_L = G_L,
                    method = method, waic = waic, waic_uncalib = waic_uncalib,
-                   multimodal = multimodal, rhat_max = rhat_max,
+                   rhat_max = rhat_max,
                    alpha = alpha, beta = beta, lambda = lambda)
     return(output)
 }
