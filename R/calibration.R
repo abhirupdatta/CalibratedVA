@@ -342,8 +342,8 @@ tune_calibratedva <- function(va_unlabeled,
     waic_df <- do.call(rbind, lapply(seq_along(samples_list), function(i) {
         calibration <- samples_list[[i]]
         multimodal <- ifelse(which.multimodal == "all",
-                             is_multimodal(calibration, C = C, K = K, cutoff=mode.cutoff),
-                             is_multimodal(calibration, C = C, params = "p", cutoff=mode.cutoff))
+                             is_multimodal(calibration$samples, C = C, K = K, cutoff=mode.cutoff),
+                             is_multimodal(calibration$samples, C = C, params = "p", cutoff=mode.cutoff))
         waic <- calibration$waic
         rhat_max <- calibration$rhat_max
         param <- ifelse(method == "mshrink", calibration$alpha[1], calibration$lambda)
