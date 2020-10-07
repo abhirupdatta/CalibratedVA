@@ -47,12 +47,12 @@ max_r_hat <- function(calibration, C, K = NA, params = "all") {
     return(rhat_max)
 }
 
-pick_param <- function(waic_df, param_vec) {
+pick_param <- function(waic_df, param_vec, rhat_cutoff) {
     for(i in 1:length(param_vec)) {
         ### Filter df to param greater than current value
         waic_df_filtered <- filter(waic_df, param >= param_vec[i])
         ### Number of remaining param that are eligible
-        neligible <- sum(waic_df_filtered$rhat_max <= 1.05 & !waic_df_filtered$multimodal)
+        neligible <- sum(waic_df_filtered$rhat_max <= rhat_cutoff & !waic_df_filtered$multimodal)
         ### Once we get down to all eligible, get the one with the smallest WAIC
         if(neligible == 0) {
             return(param_vec[length(param_vec)])
@@ -65,12 +65,12 @@ pick_param <- function(waic_df, param_vec) {
 }
 
 
-pick_lambda_p_multimodal <- function(waic_df, lambda_vec) {
+pick_lambda_p_multimodal <- function(waic_df, lambda_vec, rhat_cutoff) {
     for(i in 1:length(lambda_vec)) {
         ### Filter df to lambda greater than current value
         waic_df_filtered <- filter(waic_df, lambda >= lambda_vec[i])
         ### Number of remaining lambda that are eligible
-        neligible <- sum(waic_df_filtered$rhat_max <= 1.05 & !waic_df_filtered$multimodal_p)
+        neligible <- sum(waic_df_filtered$rhat_max <= rhat_cutoff & !waic_df_filtered$multimodal_p)
         ### Once we get down to all eligible, get the one with the smallest WAIC
         if(neligible == 0) {
             return(lambda_vec[length(lambda_vec)])

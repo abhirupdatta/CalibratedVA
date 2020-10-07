@@ -275,6 +275,7 @@ tune_calibratedva <- function(va_unlabeled,
                               samples_list = NULL,
                               which.multimodal = "all",
                               which.rhat = "all", mode.cutoff = .05,
+                              rhat_cutoff = 1.05,
                               ...) {
     A_U <- va_unlabeled
     A_L <- va_labeled
@@ -356,9 +357,9 @@ tune_calibratedva <- function(va_unlabeled,
     ### pick final model
     waic_df <- arrange(waic_df, param)
     if(method == "mshrink") {
-        my_param <- pick_param(waic_df, param_vec = sort(alpha_vec))
+        my_param <- pick_param(waic_df, param_vec = sort(alpha_vec), rhat_cutoff=rhat_cutoff)
     } else {
-        my_param <- pick_param(waic_df, param_vec = sort(lambda_vec))
+        my_param <- pick_param(waic_df, param_vec = sort(lambda_vec), rhat_cutoff=rhat_cutoff)
     }
     
     alpha_final <- switch(method == "mshrink", my_param, NULL)
