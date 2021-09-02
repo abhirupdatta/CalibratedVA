@@ -157,7 +157,7 @@ gbql_ensemble_log_lik <- function(post_samples, A_U, A_L, G_L) {
     return(log_lik_mat)
 }
 
-uncalib_log_lik <- function(post_samples, A_U, A_L, G_L, delta = 1, eps = .001) {
+uncalib_log_lik <- function(post_samples, A_U, A_L, G_L, delta = 1, sens = .95) {
     C <- ncol(A_U)
     log_lik_list <- lapply(1:length(post_samples), function(i) {
         chain_samples <- post_samples[[i]]
@@ -168,7 +168,12 @@ uncalib_log_lik <- function(post_samples, A_U, A_L, G_L, delta = 1, eps = .001) 
         #M_samples <- chain_samples[,grepl("M", param_names)]
         p_samples <- rdirichlet(S, v + delta)
         C <- ncol(A_U)
-        M_mat <- (1-eps) * diag(1, C) + eps / C
+        M_mat <- matrix(NA, nrow = C, ncol = C)
+        for(i in 1:C) {
+            for(j in 1:C) {
+                M_mat[i,j] <- ifelse(i==j, sens, (1-sens)/(C-1))
+            }
+        } 
         N <- nrow(A_U)
         n <- nrow(A_L)
         log_lik_chain <- matrix(NA, nrow = nrow(chain_samples), ncol = N + n)
