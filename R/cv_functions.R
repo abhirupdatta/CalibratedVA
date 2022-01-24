@@ -158,6 +158,7 @@ gbql_ensemble_log_lik <- function(post_samples, A_U, A_L, G_L) {
 }
 
 uncalib_log_lik <- function(post_samples, A_U, A_L, G_L, delta = 1, sens = .95) {
+    set.seed(123)
     C <- ncol(A_U)
     log_lik_list <- lapply(1:length(post_samples), function(i) {
         chain_samples <- post_samples[[i]]
