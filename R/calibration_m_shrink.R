@@ -8,6 +8,7 @@ calibratedva_mshrink <- function(A_U, A_L = NULL, G_L = NULL, causes, ndraws = 1
                                  print.chains = TRUE,
                                  nchains = 3,
                                  init.seed = 123) {
+
     ### If A_U is a matrix (dimension 2), change to array
     if(length(dim(A_U)) == 2) {
         A_U <- matrix_to_array(A_U)
@@ -54,11 +55,11 @@ calibratedva_mshrink <- function(A_U, A_L = NULL, G_L = NULL, causes, ndraws = 1
             T.array.sc <- array(0, dim=c(C,C,K))
         }
     }
-    iter_pct <- round(ndraws * .1)
+    iter_pct <- round((ndraws+burnin) * .1)
     posterior.list <- future_lapply(1:nchains, function(chain){
         #seed <- init.seeds[chain]
         #set.seed(seed)
-        post.samples <- vector("list", ndraws)
+        post.samples <- vector("list", ndraws+burnin)
         ### Initialize array of M matrices
         M.array <- sapply(1:K, function(k) {
             M.mat <- initialize.M(C)
@@ -102,7 +103,7 @@ calibratedva_mshrink <- function(A_U, A_L = NULL, G_L = NULL, causes, ndraws = 1
                                                             max.gamma) 
         }
         
-        for(i in 2:ndraws){
+        for(i in 2:(ndraws+burnin)){
             post.samples[[i]]$M.array <- sapply(1:K, function(k) 
                 sample.M(post.samples[[i-1]]$B.array[,,k], 
                          T.mat = post.samples[[i-1]]$T.array[,,k],
@@ -134,8 +135,8 @@ calibratedva_mshrink <- function(A_U, A_L = NULL, G_L = NULL, causes, ndraws = 1
                                                                 epsilon, alpha[k], beta, M.mat,
                                                                 tau.vec, max.gamma) 
             }
-            my_pct <- round(i / ndraws, 1) * 100
-            my_message <- paste("Chain", chain, "Draw", i, "/", ndraws, paste0("[", my_pct, "%]\n"))
+            my_pct <- round(i / (ndraws+burnin), 1) * 100
+            my_message <- paste("Chain", chain, "Draw", i, "/", ndraws+burnin, paste0("[", my_pct, "%]\n"))
             if((i%%iter_pct)==0 & print.chains) cat(my_message)
         }
         ### Put everything into a matrix, to be converted into an mcmc object
@@ -170,7 +171,7 @@ calibratedva_mshrink <- function(A_U, A_L = NULL, G_L = NULL, causes, ndraws = 1
         return(mcmc(post.samples.mat))
     }, future.seed = init.seed, future.stdout = NA)
     post.samples.list  <- mcmc.list(posterior.list)
-    post.samples.list <- window(post.samples.list, start = burnin, thin = thin)
+    post.samples.list <- window(post.samples.list, start = burnin+1, thin = thin)
     return(post.samples.list)
 }
 

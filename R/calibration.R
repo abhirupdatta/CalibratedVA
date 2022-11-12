@@ -80,7 +80,6 @@ calibratedva <- function(va_unlabeled,
                          delta = 1,
                          epsilon = .001,
                          tau = .5, 
-                         which.multimodal = "all",
                          which.rhat = "all",
                          print.chains = TRUE, 
                          init.seed = 123) {
@@ -181,9 +180,6 @@ calibratedva <- function(va_unlabeled,
         K <- 1
     }
     C <- length(causes)
-    multimodal <- ifelse(which.multimodal == "all",
-                         is_multimodal(samples, C = C, K = K),
-                         is_multimodal(samples, C = C, params = "p"))
     if(is_ensemble) {
         waic <- quietly_get_waic(samples,
                                  A_U = A_U_array,
@@ -223,7 +219,7 @@ calibratedva <- function(va_unlabeled,
     ### (either ensemble vs single algorithm, and single-cause vs multi-cause)
     output <- list(samples = samples, A_U = A_U, A_L = A_L, G_L = G_L,
                    method = method, waic = waic, waic_uncalib = waic_uncalib,
-                   multimodal = multimodal, rhat_max = rhat_max,
+                   rhat_max = rhat_max,
                    alpha = alpha, beta = beta, lambda = lambda)
     return(output)
 }
@@ -278,7 +274,8 @@ tune_calibratedva <- function(va_unlabeled,
                               alpha_vec = NULL, lambda_vec = NULL,
                               samples_list = NULL,
                               which.multimodal = "all",
-                              which.rhat = "all",
+                              which.rhat = "all", mode.cutoff = .05,
+                              rhat_cutoff = 1.05,
                               ...) {
     A_U <- va_unlabeled
     A_L <- va_labeled
@@ -345,7 +342,9 @@ tune_calibratedva <- function(va_unlabeled,
     } 
     waic_df <- do.call(rbind, lapply(seq_along(samples_list), function(i) {
         calibration <- samples_list[[i]]
-        multimodal <- calibration$multimodal
+        multimodal <- ifelse(which.multimodal == "all",
+                             is_multimodal(calibration$samples, C = C, K = K, cutoff=mode.cutoff),
+                             is_multimodal(calibration$samples, C = C, params = "p", cutoff=mode.cutoff))
         waic <- calibration$waic
         rhat_max <- calibration$rhat_max
         param <- ifelse(method == "mshrink", calibration$alpha[1], calibration$lambda)
@@ -358,9 +357,9 @@ tune_calibratedva <- function(va_unlabeled,
     ### pick final model
     waic_df <- arrange(waic_df, param)
     if(method == "mshrink") {
-        my_param <- pick_param(waic_df, param_vec = sort(alpha_vec))
+        my_param <- pick_param(waic_df, param_vec = sort(alpha_vec), rhat_cutoff=rhat_cutoff)
     } else {
-        my_param <- pick_param(waic_df, param_vec = sort(lambda_vec))
+        my_param <- pick_param(waic_df, param_vec = sort(lambda_vec), rhat_cutoff=rhat_cutoff)
     }
     
     alpha_final <- switch(method == "mshrink", my_param, NULL)

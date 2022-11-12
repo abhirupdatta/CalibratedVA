@@ -47,12 +47,12 @@ max_r_hat <- function(calibration, C, K = NA, params = "all") {
     return(rhat_max)
 }
 
-pick_param <- function(waic_df, param_vec) {
+pick_param <- function(waic_df, param_vec, rhat_cutoff) {
     for(i in 1:length(param_vec)) {
         ### Filter df to param greater than current value
         waic_df_filtered <- filter(waic_df, param >= param_vec[i])
         ### Number of remaining param that are eligible
-        neligible <- sum(waic_df_filtered$rhat_max <= 1.05 & !waic_df_filtered$multimodal)
+        neligible <- sum(waic_df_filtered$rhat_max <= rhat_cutoff & !waic_df_filtered$multimodal)
         ### Once we get down to all eligible, get the one with the smallest WAIC
         if(neligible == 0) {
             return(param_vec[length(param_vec)])
@@ -65,12 +65,12 @@ pick_param <- function(waic_df, param_vec) {
 }
 
 
-pick_lambda_p_multimodal <- function(waic_df, lambda_vec) {
+pick_lambda_p_multimodal <- function(waic_df, lambda_vec, rhat_cutoff) {
     for(i in 1:length(lambda_vec)) {
         ### Filter df to lambda greater than current value
         waic_df_filtered <- filter(waic_df, lambda >= lambda_vec[i])
         ### Number of remaining lambda that are eligible
-        neligible <- sum(waic_df_filtered$rhat_max <= 1.05 & !waic_df_filtered$multimodal_p)
+        neligible <- sum(waic_df_filtered$rhat_max <= rhat_cutoff & !waic_df_filtered$multimodal_p)
         ### Once we get down to all eligible, get the one with the smallest WAIC
         if(neligible == 0) {
             return(lambda_vec[length(lambda_vec)])
@@ -157,7 +157,8 @@ gbql_ensemble_log_lik <- function(post_samples, A_U, A_L, G_L) {
     return(log_lik_mat)
 }
 
-uncalib_log_lik <- function(post_samples, A_U, A_L, G_L, delta = 1, eps = .001) {
+uncalib_log_lik <- function(post_samples, A_U, A_L, G_L, delta = 1, sens = .95) {
+    set.seed(123)
     C <- ncol(A_U)
     log_lik_list <- lapply(1:length(post_samples), function(i) {
         chain_samples <- post_samples[[i]]
@@ -168,7 +169,12 @@ uncalib_log_lik <- function(post_samples, A_U, A_L, G_L, delta = 1, eps = .001) 
         #M_samples <- chain_samples[,grepl("M", param_names)]
         p_samples <- rdirichlet(S, v + delta)
         C <- ncol(A_U)
-        M_mat <- (1-eps) * diag(1, C) + eps / C
+        M_mat <- matrix(NA, nrow = C, ncol = C)
+        for(i in 1:C) {
+            for(j in 1:C) {
+                M_mat[i,j] <- ifelse(i==j, sens, (1-sens)/(C-1))
+            }
+        } 
         N <- nrow(A_U)
         n <- nrow(A_L)
         log_lik_chain <- matrix(NA, nrow = nrow(chain_samples), ncol = N + n)
